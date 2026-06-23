@@ -772,7 +772,7 @@ export default function JourneyMap({ showEsl = false, testMode = false }: { show
               const regionLeft = gx(gIdx, BRANCH_W0);
               const regionW = wpx(WEEKS - BRANCH_W0);
               return (
-                <div className="absolute left-0 pointer-events-none" style={{ top: 0, height: TOTAL_H, width: TOTAL_W, zIndex: testMode ? 49 : 45 }}>
+                <div key={`s2-branches-${gIdx}`} className="absolute left-0 pointer-events-none" style={{ top: 0, height: TOTAL_H, width: TOTAL_W, zIndex: testMode ? 49 : 45 }}>
                   {g11Branches.map((bp, bi) => {
                     const isClub = bp.key === "club";
                     // /test: Strategy+ takes the full lane; the 90+ Club is rendered below
