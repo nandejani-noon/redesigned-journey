@@ -46,9 +46,10 @@ const STRIDE = YEAR_W + SUMMER_W;
 // is computed inside the component from the selected `grades`.
 const AXIS_WEEKS = Array.from({ length: WEEKS + 1 }, (_, i) => i);   // every week
 
-// chronological x: grade g, week w -> px from the left of the whole timeline
-const gx = (g: number, w: number) => PAD_L + g * STRIDE + (w / WEEKS) * YEAR_W;
+// wpx: week count → pixel width
 const wpx = (wks: number) => (wks / WEEKS) * YEAR_W;
+// gx is redefined inside the component (lane-aware). SemBar / MomentumSpark
+// receive xOffset so they don't need module-level gx.
 
 const HATCH_DEAD = "repeating-linear-gradient(45deg,#f8fafc,#f8fafc 7px,#e9eef4 7px,#e9eef4 12px)";
 const HATCH_FINALS = "repeating-linear-gradient(45deg,#fffbeb,#fffbeb 6px,#fde68a 6px,#fde68a 11px)";
@@ -175,7 +176,32 @@ export default function JourneyMap({ showEsl = false, testMode = false }: { show
   // plus Tahsili (G12), which mirrors the grade-10 Qudrat structure.
   const PRIMARY_TRACKS: Track[] = testMode ? ["qudrat", "tahsili"] : ["qudrat"];
   const isPrimary = (t: Track) => PRIMARY_TRACKS.includes(t);
-  const TOTAL_W = PAD_L * 2 + grades.length * YEAR_W + (grades.length - 1) * SUMMER_W;
+
+  // In the main view G11 is split into two parallel lane columns (Level 1 entry
+  // and Level 2 entry). Each shows its own full S1 path + the shared S2 branches.
+  // In /test and /esl the classic single-column G11 behaviour is kept.
+  interface GradeLane { grade: Grade; variant: "default" | "l1" | "l2"; title: string; levelTag?: string }
+  const gradeLanes: GradeLane[] = grades.flatMap((grade): GradeLane[] =>
+    (grade === G11 && !testMode && !showEsl)
+      ? [
+          { grade: G11, variant: "l1", title: "Grade 11", levelTag: "Level 1 entry" },
+          { grade: G11, variant: "l2", title: "Grade 11", levelTag: "Level 2 entry" },
+        ]
+      : [{ grade, variant: "default", title: gradeMeta[grade].title, levelTag: gradeMeta[grade].levelTag }]
+  );
+  // x-offset per lane: no summer gap between adjacent lanes of the same grade
+  const gradeLaneOffsets: number[] = gradeLanes.map((_, i): number => {
+    if (i === 0) return PAD_L;
+    let off = PAD_L;
+    for (let j = 0; j < i; j++) {
+      off += YEAR_W;
+      if (gradeLanes[j].grade !== gradeLanes[j + 1].grade) off += SUMMER_W;
+    }
+    return off;
+  });
+  // lane-aware x function (shadows the removed module-level gx)
+  const gx = (g: number, w: number) => gradeLaneOffsets[g] + (w / WEEKS) * YEAR_W;
+  const TOTAL_W = gradeLanes.length > 0 ? gradeLaneOffsets[gradeLanes.length - 1] + YEAR_W + PAD_L : PAD_L * 2;
   const laneHeights = tracks.map((t) => (isPrimary(t) ? QUDRAT_LANE_H : ESL_LANE_H));
   const ASMT_H = laneHeights.reduce((a, b) => a + b, 0);  // subject lanes stacked, inside the blocks
   // /test drops the standalone Momentum row (it's redrawn over the Qudrat lane),
@@ -269,37 +295,39 @@ export default function JourneyMap({ showEsl = false, testMode = false }: { show
 
             {/* calendar sections — rendered PER subject lane so sections can differ per subject */}
             <div className="absolute left-0" style={{ top: COL_TOP, height: COL_H, width: TOTAL_W }}>
-              {grades.map((grade, g) =>
+              {gradeLanes.map(({ grade }, g) =>
                 tracks.map((track, ti) => {
-                  if (!trackMeta[track].grades.includes(grade)) return null;  // inactive → grey overlay handles it
+                  if (!trackMeta[track].grades.includes(grade)) return null;
                   const list = phasesFor(track);
                   return list.map((ph, pi) => {
                     const { start, wks } = phaseSpan(list, pi);
                     const s = phaseStyle(ph, grade);
                     return (
-                      <div key={`${grade}-${track}-${ph.key}`}
+                      <div key={`${g}-${track}-${ph.key}`}
                         className="absolute border-r-2 border-white"
                         style={{ left: gx(g, start), width: wpx(wks), top: laneTop(ti), height: laneH(ti), background: s.background, color: s.color }} />
                     );
                   });
                 }),
               )}
-              {grades.slice(0, -1).map((_, g) => (
-                <div key={`sum-${g}`} className="absolute top-0 bottom-0 flex items-center justify-center" style={{ left: gx(g, 44), width: SUMMER_W, background: HATCH_SUMMER }}>
-                  <span className="text-[9px] font-bold text-slate-400 -rotate-90 whitespace-nowrap">SUMMER BREAK</span>
-                </div>
-              ))}
+              {/* Summer break gaps — only between lanes of DIFFERENT grades */}
+              {gradeLanes.slice(0, -1).map((gl, g) => {
+                if (gl.grade === gradeLanes[g + 1].grade) return null;
+                return (
+                  <div key={`sum-${g}`} className="absolute top-0 bottom-0 flex items-center justify-center" style={{ left: gx(g, 44), width: SUMMER_W, background: HATCH_SUMMER }}>
+                    <span className="text-[9px] font-bold text-slate-400 -rotate-90 whitespace-nowrap">SUMMER BREAK</span>
+                  </div>
+                );
+              })}
             </div>
 
-            {/* OVERLAY — subject-lane separators + zebra tint. The separator runs the
-                full width, but the zebra tint is applied per year column only so it
-                doesn't darken the shared summer-break hatch between years. */}
+            {/* OVERLAY — subject-lane separators + zebra tint */}
             <div className="absolute left-0 pointer-events-none" style={{ top: COL_TOP, height: COL_H, width: TOTAL_W }}>
               {tracks.map((t, i) => (
                 <Fragment key={t}>
                   <div className="absolute left-0 border-t border-slate-300"
                     style={{ top: laneTop(i), height: laneH(i), width: TOTAL_W }} />
-                  {i % 2 === 1 && grades.map((_, g) => (
+                  {i % 2 === 1 && gradeLanes.map((_, g) => (
                     <div key={`zebra-${t}-${g}`} className="absolute"
                       style={{ left: gx(g, 0), width: YEAR_W, top: laneTop(i), height: laneH(i), background: "rgba(15,23,42,0.045)" }} />
                   ))}
@@ -309,10 +337,10 @@ export default function JourneyMap({ showEsl = false, testMode = false }: { show
 
             {/* OVERLAY — grey out (grade, subject) cells where the track isn't active */}
             <div className="absolute left-0 pointer-events-none" style={{ top: COL_TOP, height: COL_H, width: TOTAL_W }}>
-              {grades.map((grade, g) =>
+              {gradeLanes.map(({ grade }, g) =>
                 tracks.map((t, i) =>
                   trackMeta[t].grades.includes(grade) ? null : (
-                    <div key={`${grade}-${t}`} className="absolute flex items-center justify-center"
+                    <div key={`${g}-${t}`} className="absolute flex items-center justify-center"
                       style={{ left: gx(g, 0), width: YEAR_W, top: laneTop(i), height: laneH(i), background: INACTIVE_FILL }}>
                       <span className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Not applicable</span>
                     </div>
@@ -321,41 +349,32 @@ export default function JourneyMap({ showEsl = false, testMode = false }: { show
               )}
             </div>
 
-            {/* OVERLAY — vertical dotted week lines (BELOW the semester/momentum bands) */}
+            {/* OVERLAY — vertical dotted week lines */}
             <div className="absolute left-0 pointer-events-none" style={{ top: GRID_TOP, height: GRID_H, width: TOTAL_W }}>
-              {grades.map((_, g) => AXIS_WEEKS.map((w) => (
+              {gradeLanes.map((_, g) => AXIS_WEEKS.map((w) => (
                 <div key={`${g}-${w}`} className="absolute top-0 bottom-0 border-l border-dashed" style={{ left: gx(g, w), borderColor: "rgba(15,23,42,0.13)" }} />
               )))}
             </div>
 
-            {/* OVERLAY — phase labels, rendered PER subject lane (sections can differ per subject).
-                z46 keeps the break/holiday labels readable ON TOP of the G11 branch washes
-                (otherwise the 90+ Club fill covers the centred holiday label). */}
+            {/* OVERLAY — phase labels (breaks/finals only — vertical text) */}
             <div className="absolute left-0 pointer-events-none" style={{ top: COL_TOP, height: COL_H, width: TOTAL_W, zIndex: 46 }}>
-              {grades.map((grade, g) =>
+              {gradeLanes.map(({ grade, variant }, g) =>
                 tracks.map((track, ti) => {
                   if (!trackMeta[track].grades.includes(grade)) return null;
                   const list = phasesFor(track);
                   return (
-                    <Fragment key={`${grade}-${track}`}>
+                    <Fragment key={`${g}-${track}`}>
                       {list.map((ph, pi) => {
-                        // G11 S2 Qudrat is owned by the branch rows — no section labels there
-                        // (breaks/finals still render their full-height vertical labels).
                         if (grade === G11 && track === "qudrat" && ph.weekStart >= BRANCH_W0 && !ph.dead && !ph.finals) return null;
                         const { start, wks } = phaseSpan(list, pi);
                         const s = phaseStyle(ph, grade);
-                        // breaks/finals are narrow columns → run the label vertically
-                        // down the full lane so it never gets cropped. Working phases
-                        // (Learning / Review) carry NO label — the key explains the colours.
                         const vertical = ph.dead || ph.finals;
                         if (!vertical) return null;
-                        // In the G11 S2 branch region the lane is split in two — center the
-                        // holiday/break label within the LOWER (Strategy +) half so the 90+ Club
-                        // path above doesn't sit over it and it stays readable. /test isn't split
-                        // (Strategy+ owns the whole lane), so centre in the full lane there.
-                        const inBranch = !testMode && grade === G11 && track === "qudrat" && ph.weekStart >= BRANCH_W0;
-                        const labelTop = inBranch ? laneTop(ti) + laneH(ti) / 2 : laneTop(ti);
-                        const labelH = inBranch ? laneH(ti) / 2 : laneH(ti);
+                        // In split G11 lanes each lane owns its full height, so centre in
+                        // the lower half only in the old single-column non-split case.
+                        const inOldBranch = testMode && grade === G11 && track === "qudrat" && ph.weekStart >= BRANCH_W0;
+                        const labelTop = inOldBranch ? laneTop(ti) + laneH(ti) / 2 : laneTop(ti);
+                        const labelH = inOldBranch ? laneH(ti) / 2 : laneH(ti);
                         return (
                           <span key={ph.key} className="absolute flex items-center justify-center"
                             style={{ left: gx(g, start), width: wpx(wks), top: labelTop, height: labelH, color: s.color }}>
@@ -371,10 +390,10 @@ export default function JourneyMap({ showEsl = false, testMode = false }: { show
 
             {/* BAND — semester (on top of the week lines) */}
             <div className="absolute left-0 pointer-events-none" style={{ top: SEM_TOP, height: semH, width: TOTAL_W }}>
-              {grades.map((grade, g) => (
-                <Fragment key={g}>
-                  <SemBar g={g} start={0} end={20} color="#475569" border={testMode ? "#0f172a" : undefined} fill="#f1f5f9" label={testMode ? "Semester 1" : "SEMESTER 1"} goal={semesterGoal[grade][1]} testMode={testMode} />
-                  <SemBar g={g} start={22} end={44} color="#475569" border={testMode ? "#0f172a" : undefined} fill="#f1f5f9" label={testMode ? "Semester 2" : "SEMESTER 2"} goal={semesterGoal[grade][2]} testMode={testMode} />
+              {gradeLanes.map((gl, g) => (
+                <Fragment key={`sem-${gl.grade}-${gl.variant}-${g}`}>
+                  <SemBar xOffset={gradeLaneOffsets[g]} start={0} end={20} color="#475569" border={testMode ? "#0f172a" : undefined} fill="#f1f5f9" label={testMode ? "Semester 1" : "SEMESTER 1"} goal={semesterGoal[gl.grade][1]} testMode={testMode} />
+                  <SemBar xOffset={gradeLaneOffsets[g]} start={22} end={44} color="#475569" border={testMode ? "#0f172a" : undefined} fill="#f1f5f9" label={testMode ? "Semester 2" : "SEMESTER 2"} goal={semesterGoal[gl.grade][2]} testMode={testMode} />
                 </Fragment>
               ))}
             </div>
@@ -383,12 +402,14 @@ export default function JourneyMap({ showEsl = false, testMode = false }: { show
                 Dropped in /test, where the curve is redrawn over the Qudrat lane. */}
             {!testMode && (
             <div className="absolute left-0 pointer-events-none border-y border-orange-200/70" style={{ top: MOM_TOP, height: MOM_H, width: TOTAL_W, background: "#fffaf4" }}>
-              {/* summer break: momentum drops to zero and reconnects to next year */}
-              {grades.slice(0, -1).map((_, g) => {
+              {/* summer break: momentum drops to zero and reconnects to next year
+                  Only shown between lanes of DIFFERENT grades (skip L1→L2 gap). */}
+              {gradeLanes.slice(0, -1).map((gl, g) => {
+                if (gl.grade === gradeLanes[g + 1].grade) return null; // same grade, no summer
                 const TOP = 14, H = MOM_H - 20;
                 const yy = (v: number) => TOP + (1 - v) * H;
-                const endV = MOM_PTS[MOM_PTS.length - 1].value;  // prev year-end peak
-                const startV = MOM_PTS[0].value;                 // next year start
+                const endV = MOM_PTS[MOM_PTS.length - 1].value;
+                const startV = MOM_PTS[0].value;
                 const d = `M0,${yy(endV)} L0,${yy(0)} L${SUMMER_W},${yy(0)} L${SUMMER_W},${yy(startV)}`;
                 return (
                   <svg key={`sum-mom-${g}`} className="absolute" style={{ left: gx(g, 44), top: 0 }} width={SUMMER_W} height={MOM_H}>
@@ -396,29 +417,24 @@ export default function JourneyMap({ showEsl = false, testMode = false }: { show
                   </svg>
                 );
               })}
-              {grades.map((_, g) => <MomentumSpark key={g} g={g} />)}
+              {gradeLanes.map((_, g) => <MomentumSpark key={g} xOffset={gradeLaneOffsets[g]} />)}
             </div>
             )}
 
-            {/* OVERLAY — "Orientation" label on the first week of each semester
-                (w0 = S1, w22 = S2), written vertically in each active lane so the
-                narrow week column stays legible. Sits below the assessment bubbles. */}
+            {/* OVERLAY — "Orientation" label on the first week of each semester */}
             <div className="absolute left-0 pointer-events-none" style={{ top: COL_TOP, height: COL_H, width: TOTAL_W }}>
-              {grades.map((grade, g) =>
+              {gradeLanes.map(({ grade }, g) =>
                 tracks.map((track, ti) =>
                   trackMeta[track].grades.includes(grade)
                     ? [0, 22].map((w) => {
-                        // G12 Tahsili has no S2 orientation week — semester 2 opens straight
-                        // into the subject-by-subject review.
                         if (grade === 12 && track === "tahsili" && w === 22) return null;
-                        // In the default (split) G11 S2 Qudrat lane, centre the orientation
-                        // label in the LOWER (Strategy +) half so the 90+ Club row above
-                        // doesn't sit over it. /test owns the full lane, so centre there.
-                        const inBranch = !testMode && grade === G11 && track === "qudrat" && w >= BRANCH_W0;
-                        const top = laneTop(ti) + (inBranch ? LANE_LABEL_H + (laneH(ti) - LANE_LABEL_H) / 2 : 0);
-                        const h = inBranch ? (laneH(ti) - LANE_LABEL_H) / 2 : laneH(ti);
+                        // In /test's single G11 column, centre S2 orientation in the lower half.
+                        // In the new split lanes each lane owns the full height.
+                        const inOldBranch = testMode && grade === G11 && track === "qudrat" && w >= BRANCH_W0;
+                        const top = laneTop(ti) + (inOldBranch ? LANE_LABEL_H + (laneH(ti) - LANE_LABEL_H) / 2 : 0);
+                        const h = inOldBranch ? (laneH(ti) - LANE_LABEL_H) / 2 : laneH(ti);
                         return (
-                          <span key={`ori-${grade}-${track}-${w}`} className="absolute flex items-center justify-center text-slate-400"
+                          <span key={`ori-${g}-${track}-${w}`} className="absolute flex items-center justify-center text-slate-400"
                             style={{ left: gx(g, w), width: wpx(1), top, height: h }}>
                             <span className="text-[9px] font-bold leading-none whitespace-nowrap -rotate-90">Orientation</span>
                           </span>
@@ -458,7 +474,7 @@ export default function JourneyMap({ showEsl = false, testMode = false }: { show
                     };
                     return PRIMARY_TRACKS.filter((t) => tracks.includes(t)).map((track) => {
                       const ti = tracks.indexOf(track);
-                      const active = grades.map((grade, g) => ({ grade, g })).filter((x) => trackMeta[track].grades.includes(x.grade));
+                      const active = gradeLanes.map((gl, g) => ({ grade: gl.grade, g })).filter((x) => trackMeta[track].grades.includes(x.grade));
 
                       // MOMENTUM — one continuous line across this track's active grades
                       const momCo: [number, number][] = [];
@@ -476,7 +492,7 @@ export default function JourneyMap({ showEsl = false, testMode = false }: { show
                       // Grey continuation of the Qudrat line into the summer break, out to
                       // the G11 July real-attempt dot sitting in the summer strip.
                       let summerLine = "";
-                      const g11i = grades.indexOf(G11);
+                      const g11i = gradeLanes.findIndex((gl) => gl.grade === G11);
                       if (track === "qudrat" && g11i >= 0) {
                         const yEnd = testCurveY("qudrat", momentumValueAt(testPtsFor(G11), WEEKS));
                         const xEnd = gx(g11i, WEEKS);
@@ -498,15 +514,19 @@ export default function JourneyMap({ showEsl = false, testMode = false }: { show
             {/* BAND — assessments (big circles, centered in their subject lane; hover = full name) */}
             {!markersHidden && (
             <div className="absolute left-0 pointer-events-none" style={{ top: COL_TOP, height: COL_H, width: TOTAL_W, zIndex: testMode ? 50 : 47 }}>
-              {grades.map((grade, g) =>
+              {gradeLanes.map(({ grade, variant }, g) =>
                 tracks.map((track, ti) => {
-                  const laneEvents = gradeEvents[grade].filter(
-                    (e) =>
-                      (e.track ?? "qudrat") === track &&
-                      // G11 semester-2 Qudrat is now shown as the two branch paths,
-                      // so its S2 events aren't drawn as standalone circles.
-                      !(grade === G11 && track === "qudrat" && e.week >= BRANCH_W0),
-                  );
+                  const laneEvents = gradeEvents[grade].filter((e) => {
+                    if ((e.track ?? "qudrat") !== track) return false;
+                    if (grade === G11 && track === "qudrat") {
+                      // S2 is handled entirely by the branch overlay
+                      if (e.week >= BRANCH_W0) return false;
+                      // In the split main view, S1 branch overlays render all S1 events
+                      // except the W0 diagnostic. Show only the diagnostic here.
+                      if (variant !== "default") return e.type === "diagnostic";
+                    }
+                    return true;
+                  });
                   const offsets = stackOffsets(laneEvents);
                   const center = laneCenterY(ti);
                   const onCurve = testMode && isPrimary(track);
@@ -573,8 +593,8 @@ export default function JourneyMap({ showEsl = false, testMode = false }: { show
                   };
                   const dot = (key: string, cx: number, grade: Grade, week: number, title: string) => mark(key, cx, grade, week, ONE_ON_ONE_COLOR, title);
                   const tri = (key: string, cx: number, grade: Grade, week: number, title: string, align: "center" | "left" = "center", onLine = false) => mark(key, cx, grade, week, CAREER_COLOR, title, align, onLine);
-                  return grades.map((grade, g) => {
-                    if (!trackMeta[track].grades.includes(grade)) return null; // track inactive this grade
+                  return gradeLanes.map(({ grade, variant }, g) => {
+                    if (!trackMeta[track].grades.includes(grade)) return null;
                     return (
                       <Fragment key={`oo-${track}-${g}`}>
                         {gradeEvents[grade]
@@ -582,6 +602,8 @@ export default function JourneyMap({ showEsl = false, testMode = false }: { show
                             (e) =>
                               (e.track ?? "qudrat") === track &&
                               (e.type === "waypoint" || e.type === "mock" || e.type === "realAttempt") &&
+                              // In split G11 lanes the branch overlay handles S1+S2 markers
+                              !(grade === G11 && track === "qudrat" && variant !== "default") &&
                               !(grade === G11 && track === "qudrat" && e.week >= BRANCH_W0),
                           )
                           .map((e) => {
@@ -604,10 +626,10 @@ export default function JourneyMap({ showEsl = false, testMode = false }: { show
             </div>
             )}
 
-            {/* BAND — months (top copy, /test only — above the Qudrat lane) */}
+            {/* BAND — months (top copy, /test only) */}
             {testMode && (
             <div className="absolute left-0 pointer-events-none bg-slate-50 border-y border-slate-200" style={{ top: TOP_MONTH_TOP, height: MONTH_H, width: TOTAL_W }}>
-              {grades.map((_, g) =>
+              {gradeLanes.map((_, g) =>
                 monthTicks.map((m, i) => {
                   const next = i + 1 < monthTicks.length ? monthTicks[i + 1].week : WEEKS;
                   const w = next - m.week;
@@ -622,10 +644,10 @@ export default function JourneyMap({ showEsl = false, testMode = false }: { show
             </div>
             )}
 
-            {/* BAND — week axis (top copy, /test only — labels sit just above the lane) */}
+            {/* BAND — week axis (top copy, /test only) */}
             {testMode && (
             <div className="absolute left-0 pointer-events-none" style={{ top: TOP_AXIS_TOP, height: TOP_WEEK_H, width: TOTAL_W }}>
-              {grades.map((_, g) => (
+              {gradeLanes.map((_, g) => (
                 <Fragment key={`top-axis-${g}`}>
                   {AXIS_WEEKS.slice(0, -1).map((w) => (
                     <div key={`top-lab-${g}-${w}`} className="absolute -translate-x-1/2 -translate-y-1/2 flex flex-col items-center leading-none" style={{ left: gx(g, w + 0.5), top: TOP_WEEK_H / 2 }}>
@@ -639,7 +661,7 @@ export default function JourneyMap({ showEsl = false, testMode = false }: { show
 
             {/* BAND — months */}
             <div className="absolute left-0 pointer-events-none bg-slate-50 border-y border-slate-200" style={{ top: MONTH_TOP, height: MONTH_H, width: TOTAL_W }}>
-              {grades.map((_, g) =>
+              {gradeLanes.map((_, g) =>
                 monthTicks.map((m, i) => {
                   const next = i + 1 < monthTicks.length ? monthTicks[i + 1].week : WEEKS;
                   const w = next - m.week;
@@ -653,10 +675,9 @@ export default function JourneyMap({ showEsl = false, testMode = false }: { show
               )}
             </div>
 
-            {/* BAND — week axis (tick marks on the week boundaries; the number sits
-                centered UNDER its own week column so it reads as "week N", not a date) */}
+            {/* BAND — week axis */}
             <div className="absolute left-0 pointer-events-none" style={{ top: AXIS_TOP, height: AXIS_H, width: TOTAL_W }}>
-              {grades.map((_, g) => (
+              {gradeLanes.map((_, g) => (
                 <Fragment key={g}>
                   {AXIS_WEEKS.map((w) => (
                     <div key={`tick-${g}-${w}`} className="absolute -translate-x-1/2 w-px h-1.5 bg-slate-300" style={{ left: gx(g, w), top: 0 }} />
@@ -670,87 +691,82 @@ export default function JourneyMap({ showEsl = false, testMode = false }: { show
               ))}
             </div>
 
-            {/* BAND — grade titles (very top, big full-width block per grade) */}
+            {/* BAND — grade titles. Each gradeLane gets its own header pill showing
+                the grade name + its level-entry tag (Level 1 / Level 2 for the G11 split). */}
             <div className="absolute left-0 pointer-events-none" style={{ top: 0, height: GH, width: TOTAL_W }}>
-              {grades.map((grade, g) => (
-                <div key={grade} className="absolute flex items-center justify-center gap-2 px-4 rounded-md border-2 border-slate-800 bg-slate-900 text-white"
+              {gradeLanes.map((gl, g) => (
+                <div key={`title-${g}`} className="absolute flex items-center justify-center gap-2 px-4 rounded-md border-2 border-slate-800 bg-slate-900 text-white"
                   style={{ left: gx(g, 0), width: YEAR_W, top: 3, bottom: 3 }}>
-                  <span className="text-sm font-extrabold tracking-tight whitespace-nowrap">{gradeMeta[grade].title}</span>
-                  {gradeMeta[grade].levelTag && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-400 text-slate-900 whitespace-nowrap">{gradeMeta[grade].levelTag}</span>
+                  <span className="text-sm font-extrabold tracking-tight whitespace-nowrap">{gl.title}</span>
+                  {gl.levelTag && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-400 text-slate-900 whitespace-nowrap">{gl.levelTag}</span>
                   )}
                 </div>
               ))}
             </div>
 
-            {/* G11 SEMESTER-1 BRANCHES — Qudrat lane splits into Level 1 (Foundations,
-                top half) and Level 2 (Strategy, bottom half) for weeks 0 → S1 end. */}
-            {(() => {
-              const gIdx = grades.indexOf(G11);
-              if (gIdx < 0) return null;
+            {/* G11 SEMESTER-1 BRANCHES — each G11 gradeLane column gets its own
+                full-height S1 path (Level 1 lane → L1 branch; Level 2 lane → L2 branch).
+                In /test the old single-column half-lane layout is kept. */}
+            {!testMode && gradeLanes.map(({ grade, variant }, g) => {
+              if (grade !== G11 || variant === "default") return null;
               const qti = tracks.indexOf("qudrat");
+              if (qti < 0) return null;
+              const branchIdx = variant === "l1" ? 0 : 1;
+              const bp = g11S1Branches[branchIdx];
               const FULL_H = laneH(qti);
-              const regionLeft = gx(gIdx, 0);
+              const regionLeft = gx(g, 0);
               const regionW = wpx(G11_S1_END);
+              const centerY = FULL_H / 2;
+              const counts: Record<number, number> = {};
+              bp.events.forEach((e) => { counts[e.week] = (counts[e.week] ?? 0) + 1; });
+              const seen: Record<number, number> = {};
+              const STEP = 36;
               return (
-                <div className="absolute left-0 pointer-events-none" style={{ top: 0, height: TOTAL_H, width: TOTAL_W, zIndex: 44 }}>
-                  {g11S1Branches.map((bp, bi) => {
-                    const subH = FULL_H / 2;
-                    const subTop = COL_TOP + laneTop(qti) + bi * subH;
-                    const centerY = subH / 2;
-                    const counts: Record<number, number> = {};
-                    bp.events.forEach((e) => { counts[e.week] = (counts[e.week] ?? 0) + 1; });
-                    const seen: Record<number, number> = {};
-                    const STEP = 28;
+                <div key={`s1-${variant}`} className="absolute pointer-events-none"
+                  style={{ left: regionLeft, width: regionW, top: COL_TOP + laneTop(qti), height: FULL_H, zIndex: 44 }}>
+                  {/* coloured band fills (e.g. "Foundations" stretch for L1) */}
+                  {bp.bands.map((bd, bdi) => {
+                    const bc = bd.color ?? bp.color;
                     return (
-                      <div key={bp.key} className="absolute text-left"
-                        style={{ left: regionLeft, width: regionW, top: subTop, height: subH }}>
-                        {/* band fills */}
-                        {bp.bands.map((bd, bdi) => {
-                          const bc = bd.color ?? bp.color;
-                          return (
-                            <span key={bdi} className="absolute rounded-sm flex items-start justify-center"
-                              style={{ left: gx(gIdx, bd.weekStart) - regionLeft, width: wpx(bd.weekEnd - bd.weekStart), top: 2, height: subH - 4,
-                                background: `color-mix(in srgb, ${bc} 18%, #ffffff)` }}>
-                              {bd.label && <span className="mt-1 px-2 py-0.5 rounded text-[9px] font-extrabold text-white shadow" style={{ background: bc }}>{bd.label}</span>}
-                            </span>
-                          );
-                        })}
-                        {/* level tag + path label */}
-                        <span className="absolute left-2 bottom-2 z-10 flex items-center gap-1">
-                          <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold text-white shadow" style={{ background: bp.color }}>{bp.levelTag}</span>
-                          <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold text-white shadow bg-slate-700">{bp.label}</span>
-                        </span>
-                        {/* plotted events */}
-                        {bp.events.map((e, i) => {
-                          const k = seen[e.week] ?? 0; seen[e.week] = k + 1;
-                          const n = counts[e.week];
-                          const offY = (k - (n - 1) / 2) * STEP;
-                          const D = 36;
-                          const badge = e.type === "realAttempt" ? `⭐` : e.type === "mock" ? "Mock" : e.short;
-                          return (
-                            <span key={i}
-                              className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center rounded-full border-[3px] border-white shadow-md font-extrabold leading-none text-white text-[9px]"
-                              style={{ left: gx(gIdx, e.week + 0.5) - regionLeft, top: centerY + offY, width: D, height: D, background: eventTypeMeta[e.type].color }}>
-                              {badge}
-                            </span>
-                          );
-                        })}
-                        {/* lane outline */}
-                        <span className="pointer-events-none absolute inset-0 rounded-sm border-2 border-dashed" style={{ borderColor: bp.color }} />
-                      </div>
+                      <span key={bdi} className="absolute rounded-sm flex items-start justify-center"
+                        style={{ left: wpx(bd.weekStart), width: wpx(bd.weekEnd - bd.weekStart), top: 2, height: FULL_H - 4,
+                          background: `color-mix(in srgb, ${bc} 18%, #ffffff)` }}>
+                        {bd.label && <span className="mt-1 px-2 py-0.5 rounded text-[9px] font-extrabold text-white shadow" style={{ background: bc }}>{bd.label}</span>}
+                      </span>
                     );
                   })}
+                  {/* path label bottom-left */}
+                  <span className="absolute left-2 bottom-2 z-10 flex items-center gap-1">
+                    <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold text-white shadow" style={{ background: bp.color }}>{bp.levelTag}</span>
+                    <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold text-white shadow bg-slate-700">{bp.label}</span>
+                  </span>
+                  {/* S1 milestone events */}
+                  {bp.events.map((e, i) => {
+                    const k = seen[e.week] ?? 0; seen[e.week] = k + 1;
+                    const n = counts[e.week];
+                    const offY = (k - (n - 1) / 2) * STEP;
+                    const D = 44;
+                    const badge = e.type === "realAttempt" ? "⭐" : e.type === "mock" ? "Mock" : e.short;
+                    return (
+                      <span key={i}
+                        className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center rounded-full border-[3px] border-white shadow-md font-extrabold leading-none text-white text-[11px]"
+                        style={{ left: wpx(e.week + 0.5), top: centerY + offY, width: D, height: D, background: eventTypeMeta[e.type].color }}>
+                        {badge}
+                      </span>
+                    );
+                  })}
+                  {/* lane outline */}
+                  <span className="pointer-events-none absolute inset-0 rounded-sm border-2 border-dashed" style={{ borderColor: bp.color }} />
                 </div>
               );
-            })()}
+            })}
 
-            {/* G11 SEMESTER-2 BRANCHES — the Qudrat lane splits into two divergent
-                paths (Level 3 on top, Level 2/Strategy+ below), each with its own milestones
-                and each clickable. Sits in the S2 region (w22 → end). */}
-            {(() => {
-              const gIdx = grades.indexOf(G11);
-              if (gIdx < 0) return null;
+            {/* G11 SEMESTER-2 BRANCHES — rendered for EVERY G11 gradeLane column.
+                In the split main view both L1 and L2 columns get the same S2 branches
+                (Level 3 on top, Level 2 / Strategy+ below). In /test the single G11
+                column gets the same treatment as before. */}
+            {gradeLanes.map(({ grade, variant }, gIdx) => { if (grade !== G11) return null;
               const qti = tracks.indexOf("qudrat");
               const FULL_H = laneH(qti);
               const regionLeft = gx(gIdx, BRANCH_W0);
@@ -924,7 +940,7 @@ export default function JourneyMap({ showEsl = false, testMode = false }: { show
                   })}
                 </div>
               );
-            })()}
+            })}
 
             {/* /test — EOC- and Review-cycle triggers, each pinned to the TOP-LEFT of
                 its own region on the G10 Qudrat lane: EOC inside the Foundation box
@@ -939,7 +955,7 @@ export default function JourneyMap({ showEsl = false, testMode = false }: { show
               return (
                 <div className="absolute left-0 pointer-events-none" style={{ top: 0, height: TOTAL_H, width: TOTAL_W, zIndex: 48 }}>
                   {cells.map(({ grade, track }) => {
-                    const g = grades.indexOf(grade);
+                    const g = gradeLanes.findIndex((gl) => gl.grade === grade && gl.variant === "default");
                     const ti = tracks.indexOf(track);
                     const top = COL_TOP + laneTop(ti) + 8;  // just inside the box top edge
                     return (
@@ -961,24 +977,19 @@ export default function JourneyMap({ showEsl = false, testMode = false }: { show
               );
             })()}
 
-            {/* OVERLAY — "Pre mock bootcamp" bands. Drawn per active (grade, lane)
-                so inactive lanes keep their "Not applicable" fill. The hatch is
-                translucent, leaving the underlying phase colour visible. */}
+            {/* OVERLAY — "Pre mock bootcamp" bands */}
             <div className="absolute left-0 pointer-events-none" style={{ top: COL_TOP, height: COL_H, width: TOTAL_W, zIndex: 46 }}>
-              {grades.map((grade, g) =>
+              {gradeLanes.map(({ grade }, g) =>
                 bootcampBands.filter((b) => b.grade === grade).map((b) =>
                   tracks.map((track, ti) => {
                     if (!trackMeta[track].grades.includes(grade)) return null;
                     const left = gx(g, b.weekStart);
                     const w = wpx(b.weekEnd - b.weekStart);
-                    // In the G11 S2 branch region the qudrat lane is split into two
-                    // half-rows; centre the label in the lower (Strategy +) half so it
-                    // doesn't land on the seam — matching the break/finals labels.
-                    const inBranch = !testMode && grade === G11 && track === "qudrat" && b.weekStart >= BRANCH_W0;
-                    const labelTop = laneTop(ti) + LANE_LABEL_H + (inBranch ? (laneH(ti) - LANE_LABEL_H) / 2 : 0);
-                    const labelH = inBranch ? (laneH(ti) - LANE_LABEL_H) / 2 : laneH(ti) - LANE_LABEL_H;
+                    const inOldBranch = testMode && grade === G11 && track === "qudrat" && b.weekStart >= BRANCH_W0;
+                    const labelTop = laneTop(ti) + LANE_LABEL_H + (inOldBranch ? (laneH(ti) - LANE_LABEL_H) / 2 : 0);
+                    const labelH = inOldBranch ? (laneH(ti) - LANE_LABEL_H) / 2 : laneH(ti) - LANE_LABEL_H;
                     return (
-                      <Fragment key={`bc-${grade}-${track}-${b.weekStart}`}>
+                      <Fragment key={`bc-${g}-${track}-${b.weekStart}`}>
                         <div className="absolute" style={{ left, width: w, top: laneTop(ti), height: laneH(ti), background: HATCH_BOOTCAMP }} />
                         <span className="absolute flex items-center justify-center" style={{ left, width: w, top: labelTop, height: labelH }}>
                           <span className="text-[9px] font-bold leading-none whitespace-nowrap -rotate-90 text-slate-400">{b.label}</span>
@@ -990,22 +1001,18 @@ export default function JourneyMap({ showEsl = false, testMode = false }: { show
               )}
             </div>
 
-            {/* OVERLAY — G12 Tahsili semester-2 subject reviews (two weeks per
-                subject). A soft coloured wash + rotated label on the Tahsili lane,
-                drawn only where that lane is active. */}
+            {/* OVERLAY — G12 Tahsili semester-2 subject reviews */}
             <div className="absolute left-0 pointer-events-none" style={{ top: COL_TOP, height: COL_H, width: TOTAL_W, zIndex: 46 }}>
-              {grades.map((grade, g) =>
+              {gradeLanes.map(({ grade }, g) =>
                 subjectReviewBands.filter((b) => b.grade === grade).map((b) => {
                   const ti = tracks.indexOf(b.track);
                   if (ti < 0 || !trackMeta[b.track].grades.includes(grade)) return null;
                   const color = tahsiliSubjectColor[b.subject] ?? "#475569";
                   const left = gx(g, b.weekStart);
                   const w = wpx(b.weekEnd - b.weekStart);
-                  // Hatched in the subject's EOC colour so each review block reads as
-                  // "the review for that subject's EOC".
                   const hatch = `repeating-linear-gradient(45deg, color-mix(in srgb, ${color} 22%, transparent) 0 6px, transparent 6px 11px)`;
                   return (
-                    <Fragment key={`sr-${grade}-${b.track}-${b.weekStart}`}>
+                    <Fragment key={`sr-${g}-${b.track}-${b.weekStart}`}>
                       <div className="absolute" style={{ left, width: w, top: laneTop(ti), height: laneH(ti), background: hatch }} />
                       <span className="absolute flex items-center justify-center" style={{ left, width: w, top: laneTop(ti) + LANE_LABEL_H, height: laneH(ti) - LANE_LABEL_H }}>
                         <span className="rounded px-1 py-0.5 text-[8px] font-bold leading-none whitespace-nowrap -rotate-90 text-white" style={{ background: color }}>{b.label}</span>
@@ -1016,26 +1023,28 @@ export default function JourneyMap({ showEsl = false, testMode = false }: { show
               )}
             </div>
 
-            {/* SECTION highlights — a dashed display box per (grade, lane). These
-                are NO LONGER clickable; the interactive units are the branch
-                rows and the EOC-cycle region below. */}
+            {/* SECTION highlights — dashed outline per (gradeLane, qudrat track) */}
             <div className="absolute left-0 pointer-events-none" style={{ top: 0, height: TOTAL_H, width: TOTAL_W, zIndex: testMode ? 46 : 40 }}>
-              {grades.map((grade, g) =>
+              {gradeLanes.map(({ grade, variant }, g) =>
                 tracks.map((track, ti) => {
-                  if (!trackMeta[track].grades.includes(grade)) return null;  // greyed-out lanes get no box
-                  if (track !== "qudrat") return null;                        // ESL lane gets no dashed box
-                  // Both boxes stop just before their finals fortnight: G11 at the
-                  // semester-1 finals, G10 at the year-end (semester-2) finals.
+                  if (!trackMeta[track].grades.includes(grade)) return null;
+                  if (track !== "qudrat") return null;
                   const s1FinalsStart = phases.find((p) => p.finals)?.weekStart ?? WEEKS;
                   const s2FinalsStart = phases.find((p) => p.key === "finalsS2")?.weekStart ?? WEEKS;
-                  const cropWeek = grade === 11 ? s1FinalsStart : grade === 10 ? s2FinalsStart : null;
+                  // For split G11 lanes: S1 box only (S2 is the branch overlay's territory)
+                  const cropWeek = (grade === G11 && variant !== "default") ? s1FinalsStart
+                    : grade === G11 ? s1FinalsStart
+                    : grade === 10 ? s2FinalsStart : null;
                   const width = cropWeek != null ? wpx(cropWeek) : YEAR_W;
+                  const moodLabel = (grade === G11 && variant === "l1") ? "Level 1"
+                    : (grade === G11 && variant === "l2") ? "Level 2"
+                    : semesterMood[grade][1];
                   return (
-                    <div key={`sec-${grade}-${track}`}
+                    <div key={`sec-${g}-${track}`}
                       className={`absolute rounded-md border-2 ${testMode ? "border-slate-900" : "border-dashed border-slate-500"}`}
                       style={{ left: gx(g, 0), width, top: COL_TOP + laneTop(ti), height: laneH(ti) }}>
                       {track === "qudrat" && (
-                        <span className="absolute left-2 bottom-2 z-10 px-2 py-0.5 rounded text-[11px] font-extrabold text-white shadow bg-slate-900">{semesterMood[grade][1]}</span>
+                        <span className="absolute left-2 bottom-2 z-10 px-2 py-0.5 rounded text-[11px] font-extrabold text-white shadow bg-slate-900">{moodLabel}</span>
                       )}
                     </div>
                   );
@@ -1043,13 +1052,10 @@ export default function JourneyMap({ showEsl = false, testMode = false }: { show
               )}
             </div>
 
-            {/* EOC-CYCLE region — the clickable gap between EOC 1 and EOC 2 on the
-                G10 Qudrat lane. Opens the five-week section-exam cycle demo.
-                In /test the trigger moves onto the EOC circle itself, so the
-                region is dropped there. */}
+            {/* EOC-CYCLE region */}
             {!testMode && (
             <div className="absolute left-0 pointer-events-none" style={{ top: 0, height: TOTAL_H, width: TOTAL_W, zIndex: 15 }}>
-              {grades.map((grade, g) => {
+              {gradeLanes.map(({ grade }, g) => {
                 if (grade !== 10) return null;
                 const ti = tracks.indexOf("qudrat");
                 const active = sel?.kind === "eoc" && sel.grade === grade;
@@ -1069,12 +1075,10 @@ export default function JourneyMap({ showEsl = false, testMode = false }: { show
             </div>
             )}
 
-            {/* REVIEW-CYCLE region — the post-Ramadan/Eid review period on the G10
-                Qudrat lane (weeks 30–44). For G10, review starts after Ramadan+Eid
-                since they're still in the EOC cycle until W24. */}
+            {/* REVIEW-CYCLE region */}
             {!testMode && (
             <div className="absolute left-0 pointer-events-none" style={{ top: 0, height: TOTAL_H, width: TOTAL_W, zIndex: 15 }}>
-              {grades.map((grade, g) => {
+              {gradeLanes.map(({ grade }, g) => {
                 if (grade !== 10) return null;
                 const ti = tracks.indexOf("qudrat");
                 const active = sel?.kind === "review" && sel.grade === grade;
@@ -1279,23 +1283,23 @@ function Legend({ testMode, markersHidden, onToggle }: { testMode: boolean; mark
   );
 }
 
-function SemBar({ g, start, end, color, border, fill, label, goal, testMode }: { g: number; start: number; end: number; color: string; border?: string; fill: string; label: string; goal: string; testMode?: boolean }) {
+function SemBar({ xOffset, start, end, color, border, fill, label, goal, testMode }: { xOffset: number; start: number; end: number; color: string; border?: string; fill: string; label: string; goal: string; testMode?: boolean }) {
   const wks = end - start;
   return (
-    <div className={`absolute flex flex-col items-center justify-center rounded-md border-2 leading-tight px-2 text-center ${testMode ? "gap-1.5 py-3" : "gap-1 py-1.5"}`} style={{ left: gx(g, start), width: wpx(wks), top: 3, bottom: 3, background: fill, borderColor: border ?? color }}>
+    <div className={`absolute flex flex-col items-center justify-center rounded-md border-2 leading-tight px-2 text-center ${testMode ? "gap-1.5 py-3" : "gap-1 py-1.5"}`} style={{ left: xOffset + wpx(start), width: wpx(wks), top: 3, bottom: 3, background: fill, borderColor: border ?? color }}>
       <span className={testMode ? "text-sm font-extrabold tracking-tight" : "text-[11px] font-extrabold tracking-wide"} style={{ color: testMode ? "#0f172a" : color }}>{label}</span>
       <span className={testMode ? "text-[11px] font-semibold text-slate-600" : "text-[10px] font-semibold text-slate-500"}>{goal}</span>
     </div>
   );
 }
 
-function MomentumSpark({ g }: { g: number }) {
+function MomentumSpark({ xOffset }: { xOffset: number }) {
   const TOP = 14, H = MOM_H - 20;
   const yy = (v: number) => TOP + (1 - v) * H;
   const line = MOM_PTS.map((p, i) => `${i === 0 ? "M" : "L"}${wpx(p.week)},${yy(p.value)}`).join(" ");
   const area = `${line} L${wpx(WEEKS)},${TOP + H} L0,${TOP + H} Z`;
   return (
-    <svg className="absolute" style={{ left: gx(g, 0), top: 0 }} width={YEAR_W} height={MOM_H}>
+    <svg className="absolute" style={{ left: xOffset, top: 0 }} width={YEAR_W} height={MOM_H}>
       <path d={area} fill="#fdba7455" />
       <path d={line} fill="none" stroke="#0d9488" strokeWidth={1.75} strokeLinejoin="round" />
     </svg>
