@@ -2,42 +2,44 @@
 
 import { type Grade, type WeekDay } from "../lib/data";
 
-type CellKind = "mastery" | "fix" | "simulator" | "qa" | "fun";
+type CellKind = "mastery" | "fix" | "simulator" | "review" | "fun";
 const cellColor: Record<CellKind, string> = {
-  mastery: "#0d9488",   // combined mastery session
-  fix: "#ea580c",       // fixing wrong answers — the core Strategy+ move
-  simulator: "#2563eb", // exam simulator — alternates biweekly with fix-mistakes
-  qa: "#7c3aed",        // aggregated Q&A with the teacher
-  fun: "#f59e0b",       // fun activity reward
+  mastery:   "#0d9488", // combined mastery session
+  fix:       "#ea580c", // fixing wrong answers — the core Strategy+ move
+  simulator: "#2563eb", // exam simulator — alternates biweekly with review
+  review:    "#7c3aed", // review session — reinforcing and connecting material
+  fun:       "#f59e0b", // fun activity reward
 };
 
 interface Cell { kind: CellKind; label: string; detail: string; }
 const cell = (kind: CellKind, label: string, detail: string): Cell => ({ kind, label, detail });
 
-// The biweekly review cycle. Mon / Wed / Thu are the same every week; Tuesday
-// alternates between the "fix your mistakes" loop and an exam simulator session.
-// Sunday has no session.
 const fixCell = cell(
   "fix", "Fix your mistakes",
   "Students revisit the questions they got wrong, review the material (solo or in teams), then work more variations of the same questions in increasing difficulty — mixed with earlier mistakes.",
 );
 const simulatorCell = cell(
   "simulator", "Simulator session",
-  "A full exam-simulator session, replacing fix-mistakes this week — sitting questions under exam-like conditions.",
+  "A full exam-simulator session — sitting questions under exam-like conditions.",
 );
+const reviewCell = cell(
+  "review", "Review session",
+  "Structured review of the week's material: identifying gaps, connecting concepts, and consolidating understanding across all topics covered so far.",
+);
+
 function weekPlan(tue: Cell): { day: WeekDay; cells: Cell[] }[] {
   return [
-    { day: "Sun", cells: [] },
+    { day: "Sun", cells: [reviewCell] },
     { day: "Mon", cells: [cell("mastery", "Mastery session", "Combined mastery session to open the week, consolidating the review material.")] },
     { day: "Tue", cells: [tue] },
-    { day: "Wed", cells: [cell("qa", "Q&A session", "Based on how the class did, the teacher presents and works through the hardest questions together.")] },
+    { day: "Wed", cells: [fixCell] },
     { day: "Thu", cells: [cell("fun", "Fun activity", "Reward: a fun activity to close the week.")] },
   ];
 }
-// Week 1 of the cycle runs the simulator; week 2 runs fix-mistakes.
+// Week 1 runs the simulator on Tuesday; week 2 runs a review session on Tuesday.
 const reviewWeeks: { title: string; plan: { day: WeekDay; cells: Cell[] }[] }[] = [
   { title: "Week 1 · Simulator", plan: weekPlan(simulatorCell) },
-  { title: "Week 2 · Fix mistakes", plan: weekPlan(fixCell) },
+  { title: "Week 2 · Review",    plan: weekPlan(reviewCell) },
 ];
 
 export default function ReviewCycle({ onClose }: { grade: Grade; onClose: () => void }) {
@@ -52,21 +54,21 @@ export default function ReviewCycle({ onClose }: { grade: Grade; onClose: () => 
         <button onClick={onClose} className="text-sm px-3 py-1.5 rounded border border-slate-300 text-slate-600 hover:bg-slate-50 shrink-0">✕ close</button>
       </div>
 
-      {/* why this exists — the 90+ study signal that motivates the whole week */}
+      {/* why this exists */}
       <div className="mt-5 rounded-md border-l-4 px-4 py-3" style={{ borderColor: "#ea580c", background: "#fff7ed" }}>
         <div className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "#c2410c" }}>Why fixing mistakes</div>
         <p className="mt-1 text-[12px] leading-snug text-slate-700">
-          From the 90+ study, the one universal signal of top performers: they go back and fix wrong answers — Grinders double the control (16% vs 8%). It's the only metric that holds across all six treated segments. This week turns that into a deliberate &ldquo;wrong answers&rdquo; loop.
+          From the 90+ study, the one universal signal of top performers: they go back and fix wrong answers — Grinders double the control (16% vs 8%). It&apos;s the only metric that holds across all six treated segments. This week turns that into a deliberate &ldquo;wrong answers&rdquo; loop.
         </p>
       </div>
 
       <div className="mt-5 min-h-[420px]">
         <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mb-1">The biweekly review cycle</div>
         <p className="text-[12px] text-slate-500 mb-3">
-          Mon / Wed / Thu repeat every week. Tuesday alternates biweekly: a simulator session one week, the fix-mistakes loop the next.
+          Sun / Mon / Wed / Thu repeat every week. Tuesday alternates biweekly: a simulator session one week, a review session the next.
         </p>
 
-        {/* two-week (biweekly) view — same day-cell structure as the EOC week view */}
+        {/* two-week (biweekly) view */}
         <div className="flex flex-col gap-4">
           {reviewWeeks.map((wk) => (
             <div key={wk.title}>

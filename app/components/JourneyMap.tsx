@@ -985,6 +985,7 @@ export default function JourneyMap({ showEsl = false, testMode = false }: { show
                 bootcampBands.filter((b) => b.grade === grade).map((b) =>
                   tracks.map((track, ti) => {
                     if (!trackMeta[track].grades.includes(grade)) return null;
+                    if (track === "english") return null;
                     const left = gx(g, b.weekStart);
                     const w = wpx(b.weekEnd - b.weekStart);
                     const inOldBranch = testMode && grade === G11 && track === "qudrat" && b.weekStart >= BRANCH_W0;
