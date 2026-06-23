@@ -107,6 +107,8 @@ const G11 = 11;
 function phaseStyle(ph: Phase, grade?: Grade) {
   if (ph.finals) return { background: HATCH_FINALS, color: "#b45309" };  // blocked for exams
   if (ph.dead) return { background: HATCH_DEAD, color: "#94a3b8" };
+  // G10 weeks 22-24 ("review") are still inside the active EOC cycle → keep them blue
+  if (grade === 10 && ph.key === "review") return { background: "#bfdbfe", color: "#1e40af" };
   // G11's coreB block (w14–17) is a pre-attempt review → green, like a S2 review block
   if (ph.weekStart >= 22 || (grade === G11 && ph.key === "coreB")) return { background: "#bbf7d0", color: "#166534" };
   return { background: "#bfdbfe", color: "#1e40af" };
