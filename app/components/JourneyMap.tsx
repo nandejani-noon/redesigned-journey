@@ -23,12 +23,16 @@ import {
   subjectReviewBands,
   tahsiliSubjectColor,
   g11Branches,
+  g11S1Branches,
+  G10_REVIEW_START,
+  G11_S1_END,
   type JourneyEvent,
   type Grade,
   type Phase,
   type PhaseKey,
   type Track,
   type BranchKey,
+  type S1BranchKey,
 } from "../lib/data";
 import EOCCycle from "./EOCCycle";
 import ReviewCycle from "./ReviewCycle";
@@ -86,16 +90,17 @@ const GRID_TOP = SEM_TOP;             // week lines run from the semester band d
 
 type Sel =
   | { kind: "branch"; grade: Grade; path: BranchKey }
+  | { kind: "s1branch"; grade: Grade; path: S1BranchKey }
   | { kind: "eoc"; grade: Grade }
   | { kind: "review"; grade: Grade }
   | null;
 
 // G11 semester-2 branch region: weeks 22 -> 44, split into two stacked paths.
 const BRANCH_W0 = 22;
-// G10 section-exam (EOC) anchors: EOC 1 sits at week 5, EOC 2 at week 11.
+// G10 section-exam (EOC) anchors: EOC 1 at week 8, EOC 2 at week 16 (8-week cycles).
 // The cycle between them is the clickable "EOC cycle" demo region.
-const EOC1_W = 5;
-const EOC2_W = 11;
+const EOC1_W = 8;
+const EOC2_W = 16;
 const G11 = 11;
 
 function phaseStyle(ph: Phase, grade?: Grade) {
@@ -668,15 +673,80 @@ export default function JourneyMap({ showEsl = false, testMode = false }: { show
             {/* BAND — grade titles (very top, big full-width block per grade) */}
             <div className="absolute left-0 pointer-events-none" style={{ top: 0, height: GH, width: TOTAL_W }}>
               {grades.map((grade, g) => (
-                <div key={grade} className="absolute flex items-center justify-center px-4 rounded-md border-2 border-slate-800 bg-slate-900 text-white"
+                <div key={grade} className="absolute flex items-center justify-center gap-2 px-4 rounded-md border-2 border-slate-800 bg-slate-900 text-white"
                   style={{ left: gx(g, 0), width: YEAR_W, top: 3, bottom: 3 }}>
                   <span className="text-sm font-extrabold tracking-tight whitespace-nowrap">{gradeMeta[grade].title}</span>
+                  {gradeMeta[grade].levelTag && (
+                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-amber-400 text-slate-900 whitespace-nowrap">{gradeMeta[grade].levelTag}</span>
+                  )}
                 </div>
               ))}
             </div>
 
+            {/* G11 SEMESTER-1 BRANCHES — Qudrat lane splits into Level 1 (Foundations,
+                top half) and Level 2 (Strategy, bottom half) for weeks 0 → S1 end. */}
+            {(() => {
+              const gIdx = grades.indexOf(G11);
+              if (gIdx < 0) return null;
+              const qti = tracks.indexOf("qudrat");
+              const FULL_H = laneH(qti);
+              const regionLeft = gx(gIdx, 0);
+              const regionW = wpx(G11_S1_END);
+              return (
+                <div className="absolute left-0 pointer-events-none" style={{ top: 0, height: TOTAL_H, width: TOTAL_W, zIndex: 44 }}>
+                  {g11S1Branches.map((bp, bi) => {
+                    const subH = FULL_H / 2;
+                    const subTop = COL_TOP + laneTop(qti) + bi * subH;
+                    const centerY = subH / 2;
+                    const counts: Record<number, number> = {};
+                    bp.events.forEach((e) => { counts[e.week] = (counts[e.week] ?? 0) + 1; });
+                    const seen: Record<number, number> = {};
+                    const STEP = 28;
+                    return (
+                      <div key={bp.key} className="absolute text-left"
+                        style={{ left: regionLeft, width: regionW, top: subTop, height: subH }}>
+                        {/* band fills */}
+                        {bp.bands.map((bd, bdi) => {
+                          const bc = bd.color ?? bp.color;
+                          return (
+                            <span key={bdi} className="absolute rounded-sm flex items-start justify-center"
+                              style={{ left: gx(gIdx, bd.weekStart) - regionLeft, width: wpx(bd.weekEnd - bd.weekStart), top: 2, height: subH - 4,
+                                background: `color-mix(in srgb, ${bc} 18%, #ffffff)` }}>
+                              {bd.label && <span className="mt-1 px-2 py-0.5 rounded text-[9px] font-extrabold text-white shadow" style={{ background: bc }}>{bd.label}</span>}
+                            </span>
+                          );
+                        })}
+                        {/* level tag + path label */}
+                        <span className="absolute left-2 bottom-2 z-10 flex items-center gap-1">
+                          <span className="px-1.5 py-0.5 rounded text-[10px] font-extrabold text-white shadow" style={{ background: bp.color }}>{bp.levelTag}</span>
+                          <span className="px-1.5 py-0.5 rounded text-[9px] font-semibold text-white shadow bg-slate-700">{bp.label}</span>
+                        </span>
+                        {/* plotted events */}
+                        {bp.events.map((e, i) => {
+                          const k = seen[e.week] ?? 0; seen[e.week] = k + 1;
+                          const n = counts[e.week];
+                          const offY = (k - (n - 1) / 2) * STEP;
+                          const D = 36;
+                          const badge = e.type === "realAttempt" ? `⭐` : e.type === "mock" ? "Mock" : e.short;
+                          return (
+                            <span key={i}
+                              className="pointer-events-none absolute z-20 -translate-x-1/2 -translate-y-1/2 flex items-center justify-center rounded-full border-[3px] border-white shadow-md font-extrabold leading-none text-white text-[9px]"
+                              style={{ left: gx(gIdx, e.week + 0.5) - regionLeft, top: centerY + offY, width: D, height: D, background: eventTypeMeta[e.type].color }}>
+                              {badge}
+                            </span>
+                          );
+                        })}
+                        {/* lane outline */}
+                        <span className="pointer-events-none absolute inset-0 rounded-sm border-2 border-dashed" style={{ borderColor: bp.color }} />
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            })()}
+
             {/* G11 SEMESTER-2 BRANCHES — the Qudrat lane splits into two divergent
-                paths (90+ Club on top, Recovery below), each with its own milestones
+                paths (Level 3 on top, Level 2/Strategy+ below), each with its own milestones
                 and each clickable. Sits in the S2 region (w22 → end). */}
             {(() => {
               const gIdx = grades.indexOf(G11);
@@ -699,7 +769,7 @@ export default function JourneyMap({ showEsl = false, testMode = false }: { show
                             <button onClick={(ev) => open({ kind: "branch", grade: G11, path: bp.key }, ev)}
                               className="pointer-events-auto rounded-md px-3 py-1.5 text-[11px] font-extrabold text-white shadow-lg transition hover:brightness-110"
                               style={{ background: bp.color }}>
-                              View 90+ pathway ▸
+                              View Level 3 pathway ▸
                             </button>
                           </div>
                         </div>
@@ -734,7 +804,7 @@ export default function JourneyMap({ showEsl = false, testMode = false }: { show
                         {/* path label bottom-left */}
                         <span className="absolute left-2 bottom-2 z-10 px-2 py-0.5 rounded text-[11px] font-extrabold text-white shadow" style={{ background: bp.color }}>
                           {bp.label}
-                          {bp.key === "recovery" && <span className="ml-1.5 font-semibold opacity-75">{"(I didn't hit 90+)"}</span>}
+                          {bp.key === "recovery" && <span className="ml-1.5 font-semibold opacity-75">{"(Level 2 → optional Level 3 upgrade)"}</span>}
                         </span>
 
                         {/* sub-period shading bands — solid week fills (no border): a blue
@@ -881,7 +951,7 @@ export default function JourneyMap({ showEsl = false, testMode = false }: { show
                         </button>
                         <button onClick={(ev) => open({ kind: "review", grade }, ev)}
                           className="pointer-events-auto absolute rounded-md bg-green-600 px-3 py-1.5 text-[11px] font-extrabold text-white shadow-lg hover:bg-green-700"
-                          style={{ left: gx(g, BRANCH_W0) + 8, top }}>
+                          style={{ left: gx(g, G10_REVIEW_START) + 8, top }}>
                           View review cycle ▸
                         </button>
                       </Fragment>
@@ -999,18 +1069,17 @@ export default function JourneyMap({ showEsl = false, testMode = false }: { show
             </div>
             )}
 
-            {/* REVIEW-CYCLE region — the semester-2 review period on the G10 Qudrat
-                lane (weeks 23–44). Opens the repeating weekly review-cadence demo.
-                In /test this overlay no longer reads cleanly over the momentum
-                curve, so it's replaced by a top-right button (below). */}
+            {/* REVIEW-CYCLE region — the post-Ramadan/Eid review period on the G10
+                Qudrat lane (weeks 30–44). For G10, review starts after Ramadan+Eid
+                since they're still in the EOC cycle until W24. */}
             {!testMode && (
             <div className="absolute left-0 pointer-events-none" style={{ top: 0, height: TOTAL_H, width: TOTAL_W, zIndex: 15 }}>
               {grades.map((grade, g) => {
                 if (grade !== 10) return null;
                 const ti = tracks.indexOf("qudrat");
                 const active = sel?.kind === "review" && sel.grade === grade;
-                const left = gx(g, BRANCH_W0);                 // semester-2 start (w23)
-                const width = wpx(WEEKS - BRANCH_W0);           // to year end (w44)
+                const left = gx(g, G10_REVIEW_START);           // G10 review starts at W30 (after Ramadan+Eid)
+                const width = wpx(WEEKS - G10_REVIEW_START);    // to year end (w44)
                 return (
                   <button key={`review-${grade}`} onClick={(ev) => open({ kind: "review", grade }, ev)}
                     className={`group absolute overflow-hidden rounded-md pointer-events-auto transition ${active ? "bg-green-500/[0.2]" : "bg-green-500/[0.12] hover:bg-green-500/[0.22]"}`}

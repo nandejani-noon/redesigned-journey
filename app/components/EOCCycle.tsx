@@ -16,7 +16,7 @@ type CellKind =
   | "concept" | "marathon" | "teamex" | "teamcomp" | "review"
   | "independent" | "roundup" | "mastery" | "exam" | "fun" | "funcareer" | "relax";
 const cellColor: Record<CellKind, string> = {
-  concept: "#2563eb",
+  concept: "#1e3a8a",
   marathon: "#1e40af",
   teamex: "#059669",
   teamcomp: "#0d9488",
@@ -39,44 +39,44 @@ const cellDetail: Record<CellKind, string> = {
   roundup: "Topic round-up — consolidating the whole cycle before the exam.",
   mastery: "Combined mastery session over the week's concepts.",
   exam: "The end-of-cycle EOC exam.",
-  fun: "A fun activity — the reward for the previous week.",
-  funcareer: "Either a fun activity OR an educational career-path activity — the reward for the week.",
+  fun: "A fun general activity — the reward for the week.",
+  funcareer: "A career-oriented activity — e.g. guest speaker, career path exploration, or industry visit. The reward for the week.",
   relax: "A purely relaxing activity (not educational) to unwind after the exam.",
 };
 
 interface Cell { kind: CellKind; label: string; detail: string; }
 const cell = (kind: CellKind, label: string): Cell => ({ kind, label, detail: cellDetail[kind] });
 
-// The full 5-week × weekday matrix of the EOC cycle.
+// The full 5-week × weekday matrix — used by G11 and as reference for G10.
 const DAYS: WeekDay[] = ["Sun", "Mon", "Tue", "Wed", "Thu"];
-const MATRIX: Record<number, Record<WeekDay, Cell[]>> = {
+const MATRIX_5: Record<number, Record<WeekDay, Cell[]>> = {
   1: {
-    Sun: [cell("fun", "Fun Activity")],
-    Mon: [cell("concept", "Concept Coverage")],
-    Tue: [cell("concept", "Concept Coverage")],
+    Sun: [cell("concept", "Concept Coverage Session")],
+    Mon: [cell("concept", "Concept Coverage Session")],
+    Tue: [cell("concept", "Concept Coverage Session")],
     Wed: [cell("concept", "Concept Coverage")],
-    Thu: [cell("mastery", "Mastery"), cell("fun", "Week Activity")],
+    Thu: [cell("mastery", "Practice Session / Mastery Session (A/B Test)"), cell("fun", "Fun Activity")],
   },
   2: {
-    Sun: [cell("concept", "Concept Coverage")],
-    Mon: [cell("marathon", "Concept Marathon")],
-    Tue: [cell("marathon", "Concept Marathon")],
+    Sun: [cell("concept", "Concept Coverage Session")],
+    Mon: [cell("concept", "Concept Coverage Session")],
+    Tue: [cell("concept", "Concept Coverage Session")],
     Wed: [cell("independent", "Independent Work")],
-    Thu: [cell("mastery", "Mastery"), cell("funcareer", "Fun / Career Activity")],
+    Thu: [cell("mastery", "Practice Session / Mastery Session (A/B Test)"), cell("funcareer", "Career Activity")],
   },
   3: {
-    Sun: [cell("teamex", "Concept Team Ex")],
-    Mon: [cell("teamex", "Concept Team Ex")],
-    Tue: [cell("teamex", "Concept Team Ex")],
+    Sun: [cell("concept", "Concept Coverage Session")],
+    Mon: [cell("concept", "Concept Coverage Session")],
+    Tue: [cell("concept", "Concept Coverage Session")],
     Wed: [cell("independent", "Independent Work")],
-    Thu: [cell("mastery", "Mastery"), cell("funcareer", "Fun / Career Activity")],
+    Thu: [cell("mastery", "Practice Session / Mastery Session (A/B Test)"), cell("fun", "Fun Activity")],
   },
   4: {
-    Sun: [cell("teamcomp", "Concept Team Comp")],
-    Mon: [cell("teamcomp", "Concept Team Comp")],
-    Tue: [cell("teamcomp", "Concept Team Comp")],
+    Sun: [cell("concept", "Concept Coverage Session")],
+    Mon: [cell("concept", "Concept Coverage Session")],
+    Tue: [cell("concept", "Concept Coverage Session")],
     Wed: [cell("independent", "Independent Work")],
-    Thu: [cell("mastery", "Mastery"), cell("funcareer", "Fun / Career Activity")],
+    Thu: [cell("mastery", "Practice Session / Mastery Session (A/B Test)"), cell("funcareer", "Career Activity")],
   },
   5: {
     Sun: [cell("review", "Review Game")],
@@ -86,8 +86,71 @@ const MATRIX: Record<number, Record<WeekDay, Cell[]>> = {
     Thu: [cell("exam", "EOC Exam"), cell("relax", "Relaxing Activity")],
   },
 };
-function weekPlan(week: number): { day: WeekDay; cells: Cell[] }[] {
-  return DAYS.map((day) => ({ day, cells: MATRIX[week][day] }));
+
+// G10 (Level 0) uses an 8-week EOC cycle — more time on foundations.
+// Weeks 1-2: re-entry + concept coverage; 3-5: marathons + team exercises; 6-7: competitions; 8: exam.
+const MATRIX_8: Record<number, Record<WeekDay, Cell[]>> = {
+  1: {
+    Sun: [cell("concept", "Concept Coverage Session")],
+    Mon: [cell("concept", "Concept Coverage Session")],
+    Tue: [cell("concept", "Concept Coverage Session")],
+    Wed: [cell("concept", "Concept Coverage")],
+    Thu: [cell("mastery", "Practice Session / Mastery Session (A/B Test)"), cell("fun", "Fun Activity")],
+  },
+  2: {
+    Sun: [cell("concept", "Concept Coverage Session")],
+    Mon: [cell("concept", "Concept Coverage Session")],
+    Tue: [cell("concept", "Concept Coverage Session")],
+    Wed: [cell("independent", "Independent Work")],
+    Thu: [cell("mastery", "Practice Session / Mastery Session (A/B Test)"), cell("funcareer", "Career Activity")],
+  },
+  3: {
+    Sun: [cell("marathon", "Concept Coverage Session")],
+    Mon: [cell("marathon", "Concept Coverage Session")],
+    Tue: [cell("marathon", "Concept Coverage Session")],
+    Wed: [cell("independent", "Independent Work")],
+    Thu: [cell("mastery", "Practice Session / Mastery Session (A/B Test)"), cell("fun", "Fun Activity")],
+  },
+  4: {
+    Sun: [cell("marathon", "Concept Coverage Session")],
+    Mon: [cell("marathon", "Concept Coverage Session")],
+    Tue: [cell("marathon", "Concept Coverage Session")],
+    Wed: [cell("independent", "Independent Work")],
+    Thu: [cell("mastery", "Practice Session / Mastery Session (A/B Test)"), cell("funcareer", "Career Activity")],
+  },
+  5: {
+    Sun: [cell("teamex", "Concept Coverage Session")],
+    Mon: [cell("teamex", "Concept Coverage Session")],
+    Tue: [cell("teamex", "Concept Coverage Session")],
+    Wed: [cell("independent", "Independent Work")],
+    Thu: [cell("mastery", "Practice Session / Mastery Session (A/B Test)"), cell("fun", "Fun Activity")],
+  },
+  6: {
+    Sun: [cell("teamex", "Concept Coverage Session")],
+    Mon: [cell("teamex", "Concept Coverage Session")],
+    Tue: [cell("teamex", "Concept Coverage Session")],
+    Wed: [cell("independent", "Independent Work")],
+    Thu: [cell("mastery", "Practice Session / Mastery Session (A/B Test)"), cell("funcareer", "Career Activity")],
+  },
+  7: {
+    Sun: [cell("teamcomp", "Concept Coverage Session")],
+    Mon: [cell("teamcomp", "Concept Coverage Session")],
+    Tue: [cell("teamcomp", "Concept Coverage Session")],
+    Wed: [cell("independent", "Independent Work")],
+    Thu: [cell("mastery", "Practice Session / Mastery Session (A/B Test)"), cell("fun", "Fun Activity")],
+  },
+  8: {
+    Sun: [cell("review", "Review Game")],
+    Mon: [cell("review", "Review Game")],
+    Tue: [cell("review", "Review Game")],
+    Wed: [cell("roundup", "Topic Round-up")],
+    Thu: [cell("exam", "EOC Exam"), cell("relax", "Relaxing Activity")],
+  },
+};
+
+function weekPlan(grade: Grade, week: number): { day: WeekDay; cells: Cell[] }[] {
+  const matrix = grade === 10 ? MATRIX_8 : MATRIX_5;
+  return DAYS.map((day) => ({ day, cells: matrix[week][day] }));
 }
 
 // Smooth a polyline with quadratic curves through the segment midpoints —
@@ -109,8 +172,8 @@ function smooth(co: [number, number][]) {
 const yFrac = (intensity: number) => (1 - intensity) * 0.68 + 0.16; // 0.16 (peak) .. 0.84 (low)
 
 // ---- The weekly SMTWT cadence for a chosen week ---------------------------
-function WeekCycle({ week }: { week: number }) {
-  const plan = weekPlan(week);
+function WeekCycle({ grade, week }: { grade: Grade; week: number }) {
+  const plan = weekPlan(grade, week);
   return (
     <div className="grid grid-cols-5 gap-2">
       {plan.map((d) => (
@@ -132,17 +195,32 @@ function WeekCycle({ week }: { week: number }) {
   );
 }
 
-// ---- Overview: the dashed momentum curve rising across W1–W5, then cascading
-//      down into the three reward nodes (EOC exam → coins → reward trip) ------
+// G10 uses an 8-week cycle overview (Level 0 — more time on foundations).
+const eocCycleG10 = [
+  { week: 1, band: "Chill", bandColor: "#0891b2", intensity: 0.15, headline: "Relax from last EOC", bullets: ["Redemption event all week", "Concept coverage sessions Sun–Wed", "Mastery + fun activity Thursday"] },
+  { week: 2, band: "Back at it", bandColor: "#2563eb", intensity: 0.28, headline: "Start building knowledge", bullets: ["Concept coverage sessions", "Independent work midweek", "Mastery + career activity Thursday"] },
+  { week: 3, band: "Building", bandColor: "#2563eb", intensity: 0.42, headline: "Deeper concept coverage", bullets: ["Concept marathons — more ground per session", "Independent work midweek", "Mastery + fun activity Thursday"] },
+  { week: 4, band: "Building", bandColor: "#2563eb", intensity: 0.54, headline: "Extended coverage", bullets: ["Concept marathons continue", "Independent work midweek", "Mastery + career activity Thursday"] },
+  { week: 5, band: "Getting Warmer", bandColor: "#059669", intensity: 0.65, headline: "Team exercises begin", bullets: ["Concept team exercises", "Independent work midweek", "Mastery + fun activity Thursday"] },
+  { week: 6, band: "Getting Warmer", bandColor: "#059669", intensity: 0.75, headline: "More team exercises", bullets: ["Concept team exercises continue", "Independent work midweek", "Mastery + career activity Thursday"] },
+  { week: 7, band: "Getting Hot", bandColor: "#ea580c", intensity: 0.88, headline: "Team competitions", bullets: ["Concept team competitions", "Independent work midweek", "Mastery + fun activity Thursday"] },
+  { week: 8, band: "The Peak", bandColor: "#dc2626", intensity: 1, headline: "EOC exam week", bullets: ["Review games to consolidate", "Topic round-up Wednesday", "EOC exam + relaxing activity Thursday"] },
+];
+
+// ---- Overview: the dashed momentum curve rising across W1–W5 (or W8 for G10),
+//      then cascading down into the three reward nodes (EOC exam → coins → reward trip) ------
 const CURVE_H = 184;     // height of the momentum zone above the week columns
 const NODE = 46;         // diameter of the cascade nodes
 
-function Overview({ hovered, setHovered, onPick }: {
+function Overview({ grade, hovered, setHovered, onPick }: {
+  grade: Grade;
   hovered: number | null;
   setHovered: (i: number | null) => void;
   onPick: (week: number) => void;
 }) {
-  const n = eocCycle.length;
+  const [lineHovered, setLineHovered] = useState(false);
+  const cycle = grade === 10 ? eocCycleG10 : eocCycle;
+  const n = cycle.length;
   // The three reward nodes — they step DOWN and to the RIGHT off the peak (the
   // EOC exam), inside the Week 5 column, following one flowing dashed line.
   const nodes = [
@@ -151,28 +229,40 @@ function Overview({ hovered, setHovered, onPick }: {
     { xPct: 95, cy: CURVE_H - 24, bg: TRIP_COLOR, label: "TRIP", sub: "Reward trip", fs: 9 },
   ];
 
-  // one continuous momentum line: weeks 1–4 rising, up to the peak (EOC), then
+  // one continuous momentum line: all weeks except the last rising, up to the peak (EOC), then
   // cascading down-right through the coins and trip nodes.
-  const co: [number, number][] = eocCycle.slice(0, 4).map((w, i) => [((i + 0.5) / n) * 100, yFrac(w.intensity) * 100]);
+  const co: [number, number][] = cycle.slice(0, n - 1).map((w, i) => [((i + 0.5) / n) * 100, yFrac(w.intensity) * 100]);
   nodes.forEach((node) => co.push([node.xPct, (node.cy / CURVE_H) * 100]));
 
   return (
     <div className="mt-5 min-h-[460px]">
       <div className="text-[11px] font-bold uppercase tracking-wider text-slate-400">One section-exam (EOC) cycle — exam to exam</div>
       <p className="mt-1 text-[12px] text-slate-500">
-        A cycle runs from one Section exam to the next — about five weeks. Momentum builds week by week up to the exam, which pays out into the rewards. Click a week to see its day-by-day plan.
+        {grade === 10
+          ? "Grade 10 (Level 0) runs 8-week cycles — more time on foundations than higher levels. Momentum builds over 8 weeks up to the EOC exam."
+          : "A cycle runs from one Section exam to the next — about five weeks. Momentum builds week by week up to the exam, which pays out into the rewards."}
+        {" "}Click a week to see its day-by-day plan.
       </p>
 
       <div className="mt-6">
-        {/* momentum curve over the five week columns, peaking at Week 5; the
+        {/* momentum curve over the week columns, peaking at the final exam week;
             reward cascade (EOC → coins → trip) drops straight down inside it */}
         <div className="relative">
-          {/* the rising dashed momentum curve, peaking at the Week 5 exam */}
-          <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="pointer-events-none absolute left-0 top-0 z-10 w-full" height={CURVE_H}>
-            <path d={smooth(co)} fill="none" stroke={MOMENTUM_COLOR} strokeWidth={2.25} strokeDasharray="6 4" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+          {/* the rising dashed momentum curve, peaking at the exam week */}
+          <svg viewBox="0 0 100 100" preserveAspectRatio="none" className="absolute left-0 top-0 z-10 w-full" height={CURVE_H}>
+            {/* invisible wide stroke for hover hit area */}
+            <path d={smooth(co)} fill="none" stroke="transparent" strokeWidth={14} vectorEffect="non-scaling-stroke"
+              onMouseEnter={() => setLineHovered(true)} onMouseLeave={() => setLineHovered(false)} style={{ cursor: "pointer" }} />
+            <path d={smooth(co)} fill="none" stroke={MOMENTUM_COLOR} strokeWidth={2.25} strokeDasharray="6 4" strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" style={{ pointerEvents: "none" }} />
           </svg>
+          {lineHovered && (
+            <div className="pointer-events-none absolute left-1/4 top-6 z-30 max-w-[220px] rounded-lg bg-slate-800 px-3 py-2 text-white shadow-xl">
+              <div className="text-[11px] font-extrabold mb-0.5 text-indigo-300">Momentum curve</div>
+              <div className="text-[10px] opacity-85 leading-snug">As the cycle progresses, students' self-study increases and learning activities become progressively more fun and motivating — momentum builds week by week, peaking at the EOC exam.</div>
+            </div>
+          )}
 
-          {/* EOC exam → coins → trip — stepping down-right off the peak, in Week 5 */}
+          {/* EOC exam → coins → trip — stepping down-right off the peak, in the last column */}
           {nodes.map((node) => (
             <div key={node.label} className="pointer-events-none absolute z-20 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-[3px] border-white font-extrabold leading-none text-white shadow-md"
               style={{ left: `${node.xPct}%`, top: node.cy, width: NODE, height: NODE, background: node.bg, fontSize: node.fs }}>
@@ -180,9 +270,9 @@ function Overview({ hovered, setHovered, onPick }: {
             </div>
           ))}
 
-          {/* five week columns — dashed verticals run the full height (curve zone + content) */}
-          <div className="grid grid-cols-5">
-            {eocCycle.map((w, i) => {
+          {/* week columns — dashed verticals run the full height (curve zone + content) */}
+          <div className={`grid grid-cols-${n}`} style={{ gridTemplateColumns: `repeat(${n}, minmax(0, 1fr))` }}>
+            {cycle.map((w, i) => {
               const hot = hovered === i;
               return (
                 <button key={w.week} onClick={() => onPick(w.week)}
@@ -214,10 +304,12 @@ function Overview({ hovered, setHovered, onPick }: {
   );
 }
 
-export default function EOCCycle({ onClose }: { grade: Grade; onClose: () => void }) {
+export default function EOCCycle({ grade, onClose }: { grade: Grade; onClose: () => void }) {
   const [weekN, setWeekN] = useState<number | null>(null);
   const [hovered, setHovered] = useState<number | null>(null);
-  const selected = weekN != null ? eocCycle.find((w) => w.week === weekN)! : null;
+  const cycle = grade === 10 ? eocCycleG10 : eocCycle;
+  const selected = weekN != null ? cycle.find((w) => w.week === weekN)! : null;
+  const examWeek = grade === 10 ? 8 : 5;
 
   return (
     <div className="overflow-y-auto p-5">
@@ -235,7 +327,7 @@ export default function EOCCycle({ onClose }: { grade: Grade; onClose: () => voi
       </div>
 
       {!selected ? (
-        <Overview hovered={hovered} setHovered={setHovered} onPick={setWeekN} />
+        <Overview grade={grade} hovered={hovered} setHovered={setHovered} onPick={setWeekN} />
       ) : (
         <>
           {/* selected-week banner */}
@@ -249,18 +341,18 @@ export default function EOCCycle({ onClose }: { grade: Grade; onClose: () => voi
             <div className="mt-4 flex items-center gap-3 rounded-lg px-4 py-3 text-white" style={{ background: "#f59e0b" }}>
               <span className="text-xl leading-none">🎟️</span>
               <div>
-                <div className="text-[13px] font-extrabold leading-tight">Redemption event — all week</div>
-                <div className="text-[11px] opacity-90 leading-tight mt-0.5">The week after the EOC is one long redemption event — students spend their coins on rewards. It rewards effort, not grades.</div>
+                <div className="text-[13px] font-extrabold leading-tight">Redemption event — all week, including a fun activity</div>
+                <div className="text-[11px] opacity-90 leading-tight mt-0.5">The week after the EOC is one long redemption event — students spend their coins on rewards and enjoy a fun group activity. It rewards effort, not grades.</div>
               </div>
             </div>
           )}
 
           <div className="mt-4 min-h-[420px]">
-            <WeekCycle week={selected.week} />
+            <WeekCycle grade={grade} week={selected.week} />
           </div>
 
           {/* post-exam reward trip */}
-          {selected.week === 5 && (
+          {selected.week === examWeek && (
             <div className="mt-3 flex items-center gap-3 rounded-lg px-4 py-3 text-white" style={{ background: TRIP_COLOR }}>
               <span className="text-xl leading-none">🏝️</span>
               <div>

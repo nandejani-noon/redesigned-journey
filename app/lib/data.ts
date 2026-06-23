@@ -269,8 +269,8 @@ export const monthTicks: { label: string; week: number }[] = [
 
 // How the year is meant to feel for students, per grade · semester.
 export const semesterMood: Record<Grade, Record<1 | 2, string>> = {
-  10: { 1: "Foundation", 2: "Review" },
-  11: { 1: "Strategy", 2: "Personalisation" },
+  10: { 1: "Foundations", 2: "Review" },
+  11: { 1: "Level 1 / Level 2", 2: "Level 2 / Level 3" },
   12: { 1: "", 2: "" },
 };
 
@@ -281,6 +281,9 @@ export const semesterGoal: Record<Grade, Record<1 | 2, string>> = {
   11: { 1: "Strategise", 2: "Drill down with personalised practice" },
   12: { 1: "", 2: "" },
 };
+
+// G10 review course starts after Ramadan + Eid (W30), unlike G11 which reviews from W22.
+export const G10_REVIEW_START = 30;
 
 export const semesters: { label: string; weekStart: number; weekEnd: number; note: string }[] = [
   { label: "Semester 1", weekStart: 0, weekEnd: 20, note: "Core instruction · Aug–Jan" },
@@ -385,11 +388,11 @@ export type LaneKey = "recovery" | "onTrack" | "club";
 export type Track = "qudrat" | "tahsili" | "english";
 // Default render = Qudrat only (the clean main view). `tracksEsl` adds the ESL
 // lane underneath and is used by the separate /esl route.
-export const tracks: Track[] = ["qudrat"];
+export const tracks: Track[] = ["qudrat", "english"];
 export const tracksEsl: Track[] = ["qudrat", "english"];
 // The /test route adds the Tahsili lane below Qudrat (Qudrat greys out in G12,
 // Tahsili greys out in G10/G11 and mirrors the G10 Qudrat structure in G12).
-export const tracksTest: Track[] = ["qudrat", "tahsili"];
+export const tracksTest: Track[] = ["qudrat", "tahsili", "english"];
 // `grades` = the grades a track is active for; other grades render greyed out
 // (e.g. Tahsili only begins in grade 12; Qudrat is done by then).
 export const trackMeta: Record<Track, { label: string; grades: Grade[] }> = {
@@ -491,7 +494,7 @@ export const eventTypeMeta: Record<EventType, { label: string; color: string }> 
 };
 
 export const laneMeta: Record<LaneKey, { label: string; color: string; desc: string }> = {
-  club: { label: "90+ Club", color: "#c026d3", desc: "Acceleration lane. Entered at 90+ in both verbal & quant. Focus shifts to exam technique and speed." },
+  club: { label: "Level 3", color: "#0d9488", desc: "Acceleration lane (Level 3 / Strategy+). Entered automatically if the student scored 90+ on their Qudrat real attempt in S1. Focus shifts to exam technique and speed." },
   onTrack: { label: "On-track", color: "#475569", desc: "Default path. Continue the main sequence toward target." },
   recovery: { label: "Recovery", color: "#ea580c", desc: "Remedial review. Entered when struggling. What to recover is read off the heatmap (strong/weak per topic)." },
 };
@@ -554,6 +557,55 @@ export const laneInfo: Record<LaneKey, LaneInfo> = {
   },
 };
 
+// Grade-11 semester-1 splits into two parallel paths from day one.
+// Level 1 = weak foundations (condensed foundations course); Level 2 = standard strategy.
+export type S1BranchKey = "level1" | "level2";
+
+export interface S1BranchPath {
+  key: S1BranchKey;
+  label: string;
+  levelTag: string;
+  color: string;
+  desc: string;
+  bands: BranchBand[];
+  events: BranchEvent[];
+}
+
+export const G11_S1_END = 20;  // S1 region ends at W20 (start of mid-year break)
+
+export const g11S1Branches: S1BranchPath[] = [
+  {
+    key: "level1",
+    label: "Foundations (condensed)",
+    levelTag: "Level 1",
+    color: "#ea580c",
+    desc: "For students who join G11 with weak foundations. Covers the full foundations curriculum in a condensed format through autumn break (W14), then a review cycle leading to the December mock and an optional first real Qudrat attempt. In S2 they enter Level 2 with a diagnostic exam.",
+    bands: [
+      { label: "Foundations (condensed)", weekStart: 0, weekEnd: 13, color: "#ea580c" },
+      { label: "Review", weekStart: 14, weekEnd: 20, color: "#059669" },
+    ],
+    events: [
+      { week: 16, short: "Mock", label: "December mock", type: "mock" },
+      { week: 17, short: "Real?", label: "Optional Real attempt #1", type: "realAttempt" },
+    ],
+  },
+  {
+    key: "level2",
+    label: "Strategy",
+    levelTag: "Level 2",
+    color: "#2563eb",
+    desc: "Standard G11 path. Strategy track with section exams through S1, leading into the December mock and first real Qudrat attempt (Real #1 is the branch point into S2).",
+    bands: [],
+    events: [
+      { week: 4, short: "EOC 1", label: "Section exam 1", type: "waypoint" },
+      { week: 8, short: "EOC 2", label: "Section exam 2", type: "waypoint" },
+      { week: 12, short: "EOC 3", label: "Section exam 3", type: "waypoint" },
+      { week: 16, short: "Mock", label: "End of S1 mock", type: "mock" },
+      { week: 17, short: "Real #1", label: "Real attempt #1 — branch point into S2", type: "realAttempt" },
+    ],
+  },
+];
+
 // Grade-11 semester-2 branches off Real attempt #1 into two divergent paths.
 // Each path runs its own set of milestones through semester 2.
 export type BranchKey = "club" | "recovery";
@@ -595,17 +647,17 @@ export interface BranchPath {
 export const g11Branches: BranchPath[] = [
   {
     key: "club",
-    label: "90+ Club",
+    label: "Level 3",
     color: "#0d9488",
-    desc: "For students who scored 90+ in both verbal and quant on Real attempt #1. Content learning is done — from here they pick how to spend the runway.",
+    desc: "Level 3 (Strategy+) — for students who scored 90+ on their Qudrat real attempt in S1. Entry is automatic based on score, not a placement exam. They follow the same review weekly cycle but in more challenging dedicated classes.",
     bands: [],
     events: [],
     options: [
-      "Keep improving — 90+ class review",
-      "Switch focus — Tahsili self-study / capstone",
+      "Keep improving — Level 3 dedicated class review (more challenging)",
+      "Stay in Level 2 — comfortable with 80+ target, no upgrade needed",
     ],
     advanced: {
-      intro: "For 90+ Club students who want to keep improving their grade: they're encouraged to stay in a dedicated 90+ class review, designed to be more challenging than the standard track.",
+      intro: "Level 3 entry is automatic — students who scored 90+ on their S1 Qudrat real attempt enter Level 3 in S2. They target 95+ and attend a dedicated, more challenging class track running parallel to Level 2. The mock at W34 doubles as a midterm for Level 3 students.",
       scenarios: [
         { when: "Achieved their Qudrat goal post-S1", then: "Move onto a Tahsili self-study plan or project." },
         { when: "Achieved their Qudrat goal late in S2", then: "They get their time back — we recommend a capstone project." },
@@ -615,12 +667,12 @@ export const g11Branches: BranchPath[] = [
   },
   {
     key: "recovery",
-    label: "Strategy +",
+    label: "Level 2 / Strategy+",
     color: "#0f172a",
-    desc: "For students below the on-track threshold on Real attempt #1. Semester 2 opens with an orientation week and review before Ramadan, then runs toward two booked Qudrat windows: one in April and a final one in July.",
+    desc: "Level 2 (Strategy+) path through S2. Students who scored 90+ on their S1 real attempt automatically move to Level 3. All others continue in Level 2 and run the review weekly cycle toward two booked Qudrat windows: April and July.",
     bands: [],
     events: [
-      { week: 33, short: "Mock", label: "Mock — before the April attempt", type: "mock" },
+      { week: 34, short: "Mock", label: "Mock / Midterm (W34)", type: "mock" },
       { week: 35, short: "2", label: "Real attempt #2 · April window", type: "realAttempt" },
       { week: 41, short: "Mock", label: "Mock — June, before the July attempt", type: "mock" },
       { week: 44, short: "3", label: "Real attempt #3 · July window · Best score", type: "realAttempt", summer: true },
@@ -653,26 +705,26 @@ export const grade10: JourneyEvent[] = [
   },
   {
     id: "g10-wp1", grade: 10, type: "waypoint", label: "Section exam 1", short: "EOC 1",
-    week: 5, phase: "coreA", semester: 1,
-    summary: "First round-up. ~1.x chapters pulled from across the four, not chapter-bound.",
-    detail: "Mid Block A. Round-up exam #1 of semester one. Checks retention of the first concept cluster while momentum is still climbing.",
-    covers: "≈1.3 chapters, mixed",
+    week: 8, phase: "coreA", semester: 1,
+    summary: "First EOC — end of the first 8-week foundations cycle.",
+    detail: "End of the first 8-week EOC cycle. Round-up exam #1 checks retention of the first concept cluster across both Kammi and Lafthi.",
+    covers: "≈2 chapters, mixed",
     topics: topics([55, 50, 44, 47, 42], [60, 52, 45, 41, 48]),
   },
   {
     id: "g10-wp2", grade: 10, type: "waypoint", label: "Section exam 2", short: "EOC 2",
-    week: 11, phase: "coreA", semester: 1,
-    summary: "Second round-up at the end of Block A, near the first momentum peak.",
-    detail: "End of Block A, just before the short break. Round-up exam #2. Densest learning has landed by now — this is a high-signal checkpoint.",
-    covers: "≈1.5 chapters, mixed",
+    week: 16, phase: "coreB", semester: 1,
+    summary: "Second EOC — end of the second 8-week foundations cycle.",
+    detail: "End of the second 8-week EOC cycle. Round-up exam #2 — a high-signal checkpoint as the densest S1 learning has now landed.",
+    covers: "≈2 chapters, mixed",
     topics: topics([64, 61, 52, 55, 50], [69, 60, 54, 49, 57]),
   },
   {
     id: "g10-wp3", grade: 10, type: "waypoint", label: "Section exam 3", short: "EOC 3",
-    week: 17, phase: "coreB", semester: 1,
-    summary: "Third round-up, sat in the last teaching week before the school finals.",
-    detail: "Round-up exam #3, the final section exam of the evenly-spaced trio — sat in the last teaching week before the school finals fortnight. A high-signal checkpoint on retention across the four chapters.",
-    covers: "Cumulative, all four chapters",
+    week: 23, phase: "review", semester: 2,
+    summary: "Third EOC — end of the third 8-week cycle, just before Ramadan.",
+    detail: "End of the third 8-week EOC cycle, sat just before Ramadan begins. The foundations course spans all of S1 and into S2 up to this point — giving Level 0 students more time on foundations than higher levels. After this, Ramadan and Eid, then the review course begins.",
+    covers: "Cumulative — all foundations content",
     target: 75, current: 68,
     topics: topics([72, 70, 60, 63, 58], [78, 71, 62, 55, 66]),
   },
@@ -694,24 +746,24 @@ export const grade10: JourneyEvent[] = [
   },
   // English track
   {
-    id: "g10-en-diag", grade: 10, type: "diagnostic", label: "English diagnostic", short: "Diagnostic",
+    id: "g10-en-diag", grade: 10, type: "diagnostic", label: "ESL Diagnostic", short: "Diagnostic",
     week: 0, phase: "coreA", semester: 1, track: "english",
-    summary: "Baseline English level on entry to grade 10.",
-    detail: "Sat in the first week alongside the Qudrat diagnostic. Establishes the starting English level to plan the year against.",
-    covers: "English baseline (all skills)",
+    summary: "Determines the student's ESL entry level at the start of grade 10.",
+    detail: "Sat in the first week alongside the Qudrat diagnostic. Determines the student's ESL starting level — results are used to place them appropriately and set the learning plan for the year. The S1 learning cycle runs right through to Week 24 (two weeks into S2) before transitioning to the S2 review cycle.",
+    covers: "English baseline (all skills: reading, writing, listening, speaking)",
   },
   {
-    id: "g10-en-eos", grade: 10, type: "exam", label: "End-of-semester exam", short: "EoS",
+    id: "g10-en-eos", grade: 10, type: "exam", label: "English Midterm", short: "Midterm",
     week: 17, phase: "coreB", semester: 1, track: "english",
-    summary: "Semester-1 English exam, sat after the Qudrat mock and before the finals fortnight.",
-    detail: "The summative English exam closing semester 1, sat after the semester-1 Qudrat mock and just before the finals fortnight.",
+    summary: "End-of-semester-1 English midterm, sat before the finals fortnight.",
+    detail: "The summative English midterm closing semester 1, sat just before the finals fortnight. Marks the end of the first half of the English foundations course.",
     covers: "All of semester-1 English",
   },
   {
-    id: "g10-en-eoy", grade: 10, type: "yearExam", label: "End-of-year exam", short: "EoY",
+    id: "g10-en-eoy", grade: 10, type: "yearExam", label: "English Final", short: "Final",
     week: 41, phase: "revisionB", semester: 2, track: "english",
-    summary: "End-of-year English exam, around the time of the grade-10 Qudrat mock.",
-    detail: "The summative end-of-year English exam, sat around the same time as the grade-10 Qudrat mock (and never before it).",
+    summary: "End-of-year English final exam, sat near the grade-10 Qudrat mock.",
+    detail: "The summative end-of-year English final, sat near the end of semester 2. Closes the grade-10 foundations year — students are being prepared for IELTS / STEP in G11 and G12.",
     covers: "All of grade-10 English",
   },
 ];
@@ -788,26 +840,26 @@ export const grade11: JourneyEvent[] = [
     target: 92, current: 88,
     topics: topics([90, 88, 84, 85, 82], [92, 89, 85, 79, 87]),
   },
-  // English track — opens with a mock, S2 mirrors grade 10
+  // English track — opens with a diagnostic, continues foundations + IELTS/STEP prep
   {
-    id: "g11-en-mock", grade: 11, type: "mock", label: "IELTS / STEP mock", short: "Mock",
+    id: "g11-en-diag", grade: 11, type: "diagnostic", label: "Entry ESL Diagnostic", short: "Diagnostic",
     week: 0, phase: "coreA", semester: 1, track: "english",
-    summary: "Opening IELTS / STEP mock at the very start of semester 1.",
-    detail: "Grade 11 English opens with a full IELTS / STEP-style mock in the first week of semester 1 to set the baseline.",
-    covers: "IELTS / STEP (full mock)",
+    summary: "Determines the student's ESL entry level at the start of grade 11.",
+    detail: "Grade 11 English opens with a diagnostic in the first week of semester 1. Results determine the student's ESL entry level and set the year's learning plan. Foundations continue from G10, with increasing focus on IELTS / STEP preparation. The S1 learning cycle extends two weeks into S2 (~W24) before the S2 review cycle begins.",
+    covers: "English baseline — all skills",
   },
   {
-    id: "g11-en-eos", grade: 11, type: "exam", label: "End-of-semester exam", short: "EoS",
+    id: "g11-en-eos", grade: 11, type: "exam", label: "English Midterm", short: "Midterm",
     week: 17, phase: "coreB", semester: 1, track: "english",
-    summary: "Semester-1 English exam, sat after the Qudrat mock and before the finals fortnight.",
-    detail: "The summative semester-1 English exam, sat after the semester-1 Qudrat mock and just before the finals fortnight.",
+    summary: "End-of-semester-1 English midterm, sat before the finals fortnight.",
+    detail: "The summative English midterm closing semester 1, sat just before the finals fortnight. Marks the halfway point of the G11 English course.",
     covers: "All of semester-1 English",
   },
   {
-    id: "g11-en-eoy", grade: 11, type: "yearExam", label: "End-of-year exam", short: "EoY",
+    id: "g11-en-eoy", grade: 11, type: "yearExam", label: "English Final", short: "Final",
     week: 41, phase: "revisionB", semester: 2, track: "english",
-    summary: "End-of-year English exam — same placement as grade 10.",
-    detail: "The summative end-of-year English exam, mirroring grade 10: sat around the same time as the year-end Qudrat attempt.",
+    summary: "End-of-year English final, sat near the end of semester 2.",
+    detail: "The summative end-of-year English final. Closes the G11 English year and sets the baseline heading into G12, where students choose their IELTS or STEP path.",
     covers: "All of grade-11 English",
   },
 ];
@@ -850,27 +902,27 @@ export const grade12: JourneyEvent[] = [
     detail: "Sat at the end of April, once the subject-by-subject reviews have run. A full mock across all subjects before the final run-in to the year-end finals.",
     covers: "Everything (grade 12 Tahsili)",
   },
-  // English track — same as grade 11
+  // English track — G12 students choose IELTS or STEP and aim to ace it
   {
-    id: "g12-en-mock", grade: 12, type: "mock", label: "IELTS / STEP mock", short: "Mock",
+    id: "g12-en-mock", grade: 12, type: "mock", label: "IELTS or STEP — opening mock", short: "Mock",
     week: 0, phase: "coreA", semester: 1, track: "english",
-    summary: "Opening IELTS / STEP mock at the very start of semester 1.",
-    detail: "Grade 12 English opens with a full IELTS / STEP-style mock in the first week of semester 1 to set the baseline.",
-    covers: "IELTS / STEP (full mock)",
+    summary: "Student chooses IELTS or STEP and takes their opening mock in week 1.",
+    detail: "At the very start of G12, the student commits to either IELTS or STEP and immediately sits a full mock to set the baseline. The whole year is then focused on acing that one exam.",
+    covers: "IELTS or STEP (full mock — student's chosen exam)",
   },
   {
-    id: "g12-en-eos", grade: 12, type: "exam", label: "End-of-semester exam", short: "EoS",
+    id: "g12-en-eos", grade: 12, type: "realAttempt", label: "First attempt (IELTS or STEP)", short: "Attempt 1",
     week: 17, phase: "coreB", semester: 1, track: "english",
-    summary: "Semester-1 English exam, sat before the finals fortnight.",
-    detail: "The summative semester-1 English exam, sat just before the finals fortnight.",
-    covers: "All of semester-1 English",
+    summary: "First real IELTS / STEP attempt at the end of semester 1.",
+    detail: "The first real IELTS or STEP attempt, sat at the end of semester 1. If the student achieves their target score here, they can drop the English course, reclaim their time, and are recommended a capstone project or self-directed endeavour. Students who haven't yet hit their target continue into S2.",
+    covers: "IELTS or STEP — first real attempt",
   },
   {
-    id: "g12-en-eoy", grade: 12, type: "yearExam", label: "End-of-year exam", short: "EoY",
+    id: "g12-en-eoy", grade: 12, type: "yearExam", label: "Final IELTS / STEP attempt", short: "Final",
     week: 41, phase: "revisionB", semester: 2, track: "english",
-    summary: "End-of-year English exam — same placement as grade 11.",
-    detail: "The summative end-of-year English exam, sat near the end of the year.",
-    covers: "All of grade-12 English",
+    summary: "Final IELTS / STEP attempt at the end of S2, for students who continue.",
+    detail: "For students who haven't yet hit their target after the S1 attempt. The full S2 review cycle leads into this final sitting. If the student aces their exam at any point in G12 (S1 or during S2), they can drop the course, get their time back, and are recommended a capstone project or self-directed path — to be decided with parents.",
+    covers: "IELTS or STEP — final attempt",
   },
 ];
 
@@ -880,8 +932,8 @@ export const gradeEvents: Record<Grade, JourneyEvent[]> = {
   12: grade12,
 };
 
-export const gradeMeta: Record<Grade, { title: string; subject: string; theme: string }> = {
-  10: { title: "Grade 10", subject: "Qudrat · Verbal + Quantitative", theme: "Foundations + review" },
+export const gradeMeta: Record<Grade, { title: string; subject: string; theme: string; levelTag?: string }> = {
+  10: { title: "Grade 10", subject: "Qudrat · Verbal + Quantitative", theme: "Foundations + review", levelTag: "Level 0" },
   11: { title: "Grade 11", subject: "Qudrat · Verbal + Quantitative", theme: "Real attempts" },
   12: { title: "Grade 12", subject: "Tahsili · Bio / Chem / Physics / Math", theme: "Achievement test (thin)" },
 };
