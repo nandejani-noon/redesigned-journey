@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+:root {
+  --background: #f8fafc;
+  --foreground: #0f172a;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+}
+
+/* pulsing outline for the "You are here" active segment in the drilldown */
+@keyframes here-pulse {
+  0%, 100% { box-shadow: 0 0 0 1.5px #fff, 0 0 0 3px var(--here-color, #0f172a); }
+  50% { box-shadow: 0 0 0 1.5px #fff, 0 0 0 5px color-mix(in srgb, var(--here-color, #0f172a) 35%, transparent); }
+}
+.here-pulse {
+  animation: here-pulse 1.4s ease-in-out infinite;
+  border-radius: 2px;
+  position: relative;
+  z-index: 1;
+}
+
+/* subtle diagonal "sweep" so the EOC / Review cycle regions read as
+   interactive/clickable. This is ONE soft skewed highlight bar (the colour is a
+   single translucent gradient on the inline backgroundImage) that travels once
+   across the region then pauses — a gentle shimmer, never a tiled pattern. */
+@keyframes overlay-sweep {
+  /* one fixed-width diagonal band travels fully across (off-left → off-right),
+     then rests off-screen until the next pass. Animating `left` (not translateX)
+     keeps the band a constant thickness while the travel still adapts to each
+     region's width. The constant skew gives the diagonal look. */
+  0% { left: -160px; }
+  45%, 100% { left: calc(100% + 80px); }
+}
+.overlay-diag {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 90px;
+  transform: skewX(-14deg);
+  will-change: left;
+  animation: overlay-sweep 2.8s ease-in-out infinite;
+}
